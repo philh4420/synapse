@@ -44,7 +44,9 @@ service cloud.firestore {
 
     // Rules for the 'settings' collection
     match /settings/site {
+      // Allow anyone to read the site settings (to check if signup is enabled)
       allow get: if true;
+      // Only admins can write
       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
   }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Bell, MessageSquare, User, Settings, LogOut, Bookmark, Activity } from 'lucide-react';
+import { Home, Compass, Bell, MessageSquare, User, Settings, LogOut, Bookmark, Activity, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -8,7 +8,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
-  const { user, logout } = useAuth();
+  const { user, userProfile, logout } = useAuth();
 
   const menuItems = [
     { id: 'feed', icon: Home, label: 'Feed' },
@@ -54,6 +54,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
             )}
           </button>
         ))}
+
+        {userProfile?.role === 'admin' && (
+          <div className="pt-4 mt-4 border-t border-slate-200/50">
+            <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Management</p>
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-200 group
+                ${activeTab === 'admin' 
+                  ? 'bg-synapse-950 shadow-lg text-white' 
+                  : 'text-slate-600 hover:bg-slate-100'
+                }`}
+            >
+              <Shield className="w-5 h-5" />
+              <span className="font-medium text-sm tracking-wide">Admin Panel</span>
+            </button>
+          </div>
+        )}
       </nav>
 
       <div className="mt-auto px-4 pt-6 border-t border-slate-200/60">
@@ -71,13 +88,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
         <div className="mt-6 flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border border-slate-100">
           <img 
-            src={user?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName}`} 
+            src={userProfile?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName}`} 
             alt="Profile" 
             className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-md"
           />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-900 truncate">
-              {user?.displayName || 'User'}
+              {userProfile?.displayName || user?.displayName || 'User'}
             </p>
             <p className="text-xs text-slate-500 truncate">
               {user?.email}

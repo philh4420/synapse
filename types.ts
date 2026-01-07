@@ -1,8 +1,10 @@
-export interface User {
+export interface UserProfile {
   uid: string;
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  coverURL?: string | null;
+  role?: 'admin' | 'user';
 }
 
 export interface Post {
@@ -33,4 +35,8 @@ export interface NavItem {
   icon: React.ElementType;
   label: string;
   active?: boolean;
+}
+
+export interface SiteSettings {
+  signupEnabled: boolean;
 }

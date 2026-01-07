@@ -2,11 +2,32 @@ import React, { useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { Feed } from '../components/Feed';
 import { RightPanel } from '../components/RightPanel';
+import { AdminPanel } from '../components/AdminPanel';
 import { Menu, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const HomePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('feed');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { userProfile } = useAuth();
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'feed':
+        return <Feed />;
+      case 'admin':
+        return <AdminPanel />;
+      default:
+        return (
+          <div className="flex items-center justify-center h-[80vh] text-slate-400">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-slate-300 mb-2">Coming Soon</h2>
+              <p>This section is under construction for 2026.</p>
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center">
@@ -33,6 +54,14 @@ export const HomePage: React.FC = () => {
                 {item}
               </button>
             ))}
+            {userProfile?.role === 'admin' && (
+              <button 
+                onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
+                className="block w-full text-left text-lg font-bold text-synapse-600 py-3 border-b border-slate-100"
+              >
+                Admin Panel
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -40,14 +69,7 @@ export const HomePage: React.FC = () => {
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
       <main className="flex-1 w-full max-w-2xl mt-14 lg:mt-0">
-        {activeTab === 'feed' ? <Feed /> : (
-          <div className="flex items-center justify-center h-[80vh] text-slate-400">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-slate-300 mb-2">Coming Soon</h2>
-              <p>This section is under construction for 2026.</p>
-            </div>
-          </div>
-        )}
+        {renderContent()}
       </main>
 
       <RightPanel />

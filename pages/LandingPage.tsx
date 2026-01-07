@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from 'firebase/auth';
-import { collection, query, getDocs, limit, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, limit, doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Mail, Lock, User as UserIcon, ArrowRight, Activity, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, ArrowRight, Activity, ArrowLeft, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+// Default Assets
+const DEFAULT_COVER_URL = "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop";
 
 export const LandingPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,6 +19,23 @@ export const LandingPage: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [signupEnabled, setSignupEnabled] = useState(true);
+  const { refreshProfile } = useAuth();
+
+  useEffect(() => {
+    const checkSettings = async () => {
+      try {
+        const settingsRef = doc(db, 'settings', 'site');
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+          setSignupEnabled(settingsSnap.data().signupEnabled);
+        }
+      } catch (err) {
+        console.log("Settings not found, assuming defaults.");
+      }
+    };
+    checkSettings();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,24 +50,32 @@ export const LandingPage: React.FC = () => {
         setSuccess("Password reset email sent. Please check your inbox.");
       } else if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
+        await refreshProfile(); // Ensure profile is loaded immediately
       } else {
+        if (!signupEnabled) {
+          throw new Error("Signups are currently closed by the administrator.");
+        }
+
         // Create Authentication User
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        const photoURL = `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`;
+        
+        // Generate Default Avatar based on name
+        const photoURL = `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(name)}`;
 
-        // Check for existing users to determine role
+        // Check for existing users to determine role (First user is admin)
         const usersRef = collection(db, 'users');
         const q = query(usersRef, limit(1));
         const snapshot = await getDocs(q);
         const role = snapshot.empty ? 'admin' : 'user';
 
-        // Create User Document in Firestore
+        // Create User Document in Firestore with Defaults
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
           email: user.email,
           displayName: name,
           photoURL: photoURL,
+          coverURL: DEFAULT_COVER_URL,
           role: role,
           createdAt: serverTimestamp()
         });
@@ -56,6 +85,8 @@ export const LandingPage: React.FC = () => {
           displayName: name,
           photoURL: photoURL
         });
+        
+        await refreshProfile();
       }
     } catch (err: any) {
       setError(err.message.replace('Firebase: ', ''));
@@ -200,6 +231,16 @@ export const LandingPage: React.FC = () => {
               </div>
             )}
 
+            {!isLogin && !signupEnabled && !isReset && (
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-100 flex gap-3 text-amber-800 text-sm">
+                 <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                 <div>
+                   <p className="font-semibold">Signups Closed</p>
+                   <p className="mt-1">New registrations are currently disabled by the administrator.</p>
+                 </div>
+              </div>
+            )}
+
             {error && (
               <div className="p-3 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm">
                 {error}
@@ -217,6 +258,7 @@ export const LandingPage: React.FC = () => {
               className="w-full" 
               size="lg"
               isLoading={loading}
+              disabled={!isLogin && !signupEnabled && !isReset}
             >
               {isReset 
                 ? "Send Reset Link" 
