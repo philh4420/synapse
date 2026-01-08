@@ -1,25 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Bookmark, Send } from 'lucide-react';
-import { Post as PostType, UserProfile } from '../types';
+import { 
+  ThumbsUp, MessageCircle, Share2, MoreHorizontal, Globe, 
+  Trash2, AlertCircle, EyeOff, Send, Smile, Camera, X 
+} from 'lucide-react';
+import { Post as PostType } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { 
-  doc, 
-  updateDoc, 
-  increment, 
-  arrayUnion, 
-  arrayRemove, 
-  collection, 
-  addDoc, 
-  serverTimestamp, 
-  onSnapshot, 
-  query, 
-  orderBy 
+  doc, updateDoc, increment, arrayUnion, arrayRemove, 
+  collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc 
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { Card } from './ui/Card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/Avatar';
 import { Button } from './ui/Button';
+import { Separator } from './ui/Separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from './ui/DropdownMenu';
+import { cn } from '../lib/utils';
 
 interface Comment {
   id: string;
@@ -35,13 +38,16 @@ interface Comment {
 export const Post: React.FC<{ post: PostType }> = ({ post }) => {
   const { user, userProfile } = useAuth();
   
+  // State
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   
-  // Check if current user has already liked this post
   const isLiked = user ? post.likedByUsers?.includes(user.uid) : false;
+  const isAuthor = user?.uid === post.author.uid;
 
+  // Real-time comments listener
   useEffect(() => {
     if (showComments) {
       const q = query(
@@ -60,18 +66,14 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
   const handleLike = async () => {
     if (!user) return;
-
     const postRef = doc(db, 'posts', post.id);
-
     try {
       if (isLiked) {
-        // Unlike
         await updateDoc(postRef, {
           likes: increment(-1),
           likedByUsers: arrayRemove(user.uid)
         });
       } else {
-        // Like
         await updateDoc(postRef, {
           likes: increment(1),
           likedByUsers: arrayUnion(user.uid)
@@ -97,7 +99,6 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         timestamp: serverTimestamp()
       });
       
-      // Update comment count on post
       await updateDoc(doc(db, 'posts', post.id), {
         comments: increment(1)
       });
@@ -108,131 +109,219 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     }
   };
 
+  const handleDeletePost = async () => {
+    if (!confirm("Are you sure you want to delete this post?")) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'posts', post.id));
+    } catch (error) {
+      console.error("Error deleting post:", error);
+      setIsDeleting(false);
+    }
+  };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    alert("Link copied to clipboard!");
+  };
+
+  if (isDeleting) return null;
+
   return (
-    <Card className="border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-300 overflow-hidden">
-      <div className="p-5 pb-2">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex gap-3">
-            <Avatar className="h-12 w-12 ring-2 ring-slate-50">
-                <AvatarImage src={post.author.avatar} alt={post.author.name} />
-                <AvatarFallback>{post.author.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <div>
-              <h3 className="font-semibold text-slate-900 leading-tight hover:text-synapse-600 cursor-pointer transition-colors">
+    <Card className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden animate-in fade-in duration-500">
+      
+      {/* --- Header --- */}
+      <div className="p-4 pb-2 flex justify-between items-start">
+        <div className="flex gap-3">
+           <Avatar className="h-10 w-10 cursor-pointer hover:brightness-95">
+              <AvatarImage src={post.author.avatar} />
+              <AvatarFallback>{post.author.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+           </Avatar>
+           <div className="flex flex-col">
+              <span className="font-semibold text-slate-900 text-[15px] hover:underline cursor-pointer leading-tight">
                 {post.author.name}
-              </h3>
-              <p className="text-sm text-slate-500">
-                {post.author.handle} · {post.timestamp ? formatDistanceToNow(post.timestamp, { addSuffix: true }) : 'Just now'}
-              </p>
-            </div>
-          </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600 rounded-full">
-            <MoreHorizontal className="w-5 h-5" />
-          </Button>
+              </span>
+              <div className="flex items-center gap-1 text-slate-500 text-xs">
+                 <span className="hover:underline cursor-pointer">
+                    {post.timestamp ? formatDistanceToNow(post.timestamp, { addSuffix: true }).replace('about ', '') : 'Just now'}
+                 </span>
+                 <span>·</span>
+                 <Globe className="w-3 h-3" />
+              </div>
+           </div>
         </div>
 
-        <p className="text-slate-700 leading-relaxed mb-4 whitespace-pre-wrap break-words">
-          {post.content}
-        </p>
-
-        {post.image && (
-          <div className="mb-2 rounded-2xl overflow-hidden shadow-sm border border-slate-100">
-            <img src={post.image} alt="Post content" className="w-full h-auto hover:scale-105 transition-transform duration-500" />
-          </div>
-        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-slate-500 hover:bg-slate-100 -mt-1 -mr-2">
+               <MoreHorizontal className="w-5 h-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 rounded-xl">
+             <DropdownMenuItem className="gap-2 cursor-pointer font-medium py-2">
+                <Share2 className="w-4 h-4" /> Save post
+             </DropdownMenuItem>
+             <DropdownMenuSeparator />
+             <DropdownMenuItem className="gap-2 cursor-pointer font-medium py-2">
+                <EyeOff className="w-4 h-4" /> Hide post
+             </DropdownMenuItem>
+             <DropdownMenuItem className="gap-2 cursor-pointer font-medium py-2">
+                <AlertCircle className="w-4 h-4" /> Report post
+             </DropdownMenuItem>
+             {isAuthor && (
+               <>
+                 <DropdownMenuSeparator />
+                 <DropdownMenuItem 
+                    onClick={handleDeletePost}
+                    className="gap-2 cursor-pointer font-medium py-2 text-red-600 focus:text-red-700 focus:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" /> Move to trash
+                 </DropdownMenuItem>
+               </>
+             )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="px-5 pb-4">
-        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-          <div className="flex gap-4">
-            <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleLike}
-                className={`flex items-center gap-2 font-medium hover:bg-transparent px-0 ${isLiked ? 'text-red-500 hover:text-red-600' : 'text-slate-500 hover:text-red-500'}`}
-            >
-              <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-              <span>{post.likes}</span>
-            </Button>
-            
-            <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowComments(!showComments)}
-                className="flex items-center gap-2 font-medium text-slate-500 hover:text-synapse-600 hover:bg-transparent px-0"
-            >
-              <MessageCircle className="w-5 h-5" />
-              <span>{post.comments}</span>
-            </Button>
-            
-            <Button variant="ghost" size="sm" className="flex items-center gap-2 font-medium text-slate-500 hover:text-green-600 hover:bg-transparent px-0">
-              <Share2 className="w-5 h-5" />
-              <span>{post.shares}</span>
-            </Button>
-          </div>
-          
-          <Button variant="ghost" size="icon" className="text-slate-400 hover:text-synapse-600 hover:bg-slate-50">
-            <Bookmark className="w-5 h-5" />
-          </Button>
-        </div>
+      {/* --- Content --- */}
+      <div className="px-4 pb-3">
+         <p className="text-[15px] text-slate-900 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+      </div>
 
-        {/* Comments Section */}
-        {showComments && (
-          <div className="mt-4 pt-4 border-t border-slate-50 animate-in slide-in-from-top-2">
-            
-            {/* Comment List */}
-            <div className="space-y-4 mb-4">
-              {comments.map((comment) => (
-                <div key={comment.id} className="flex gap-3">
-                   <Avatar className="h-8 w-8 mt-1">
-                      <AvatarImage src={comment.author.avatar} />
-                      <AvatarFallback>{comment.author.name[0]}</AvatarFallback>
-                   </Avatar>
-                   <div className="flex-1">
-                      <div className="bg-slate-50 rounded-2xl rounded-tl-none p-3 inline-block">
-                         <span className="font-semibold text-sm text-slate-900 block">{comment.author.name}</span>
-                         <span className="text-sm text-slate-700">{comment.text}</span>
-                      </div>
-                      <div className="flex gap-4 mt-1 ml-2 text-xs text-slate-400 font-medium">
-                        <button className="hover:text-slate-600">Like</button>
-                        <button className="hover:text-slate-600">Reply</button>
-                        <span>{comment.timestamp ? formatDistanceToNow(comment.timestamp.toDate(), { addSuffix: true }) : 'Just now'}</span>
-                      </div>
-                   </div>
+      {post.image && (
+        <div className="w-full bg-slate-50 border-t border-b border-slate-100 flex items-center justify-center max-h-[600px] overflow-hidden cursor-pointer">
+           <img src={post.image} alt="Post content" className="w-full h-full object-cover" />
+        </div>
+      )}
+
+      {/* --- Stats --- */}
+      <div className="px-4 py-3 flex items-center justify-between">
+         <div className="flex items-center gap-1.5 cursor-pointer hover:underline decoration-slate-500">
+             {post.likes > 0 && (
+                <div className="bg-synapse-600 rounded-full p-1 flex items-center justify-center">
+                   <ThumbsUp className="w-3 h-3 text-white fill-current" />
                 </div>
-              ))}
-              {comments.length === 0 && (
-                <p className="text-sm text-slate-400 italic text-center py-2">No comments yet. Be the first!</p>
-              )}
+             )}
+             <span className="text-slate-500 text-[15px]">{post.likes > 0 ? post.likes : 'Be the first to like this'}</span>
+         </div>
+         <div className="flex items-center gap-3 text-slate-500 text-[15px]">
+            {post.comments > 0 && (
+               <span className="hover:underline cursor-pointer" onClick={() => setShowComments(true)}>{post.comments} comments</span>
+            )}
+            {post.shares > 0 && (
+               <span className="hover:underline cursor-pointer">{post.shares} shares</span>
+            )}
+         </div>
+      </div>
+
+      <div className="px-3">
+         <Separator className="bg-slate-200" />
+      </div>
+
+      {/* --- Actions --- */}
+      <div className="px-2 py-1 flex items-center justify-between">
+         <Button 
+            variant="ghost" 
+            onClick={handleLike}
+            className={cn(
+              "flex-1 gap-2 font-semibold text-[15px] hover:bg-slate-100 rounded-lg h-9 transition-colors",
+              isLiked ? "text-synapse-600" : "text-slate-500"
+            )}
+         >
+            <ThumbsUp className={cn("w-5 h-5", isLiked && "fill-current")} />
+            Like
+         </Button>
+
+         <Button 
+            variant="ghost" 
+            onClick={() => setShowComments(!showComments)}
+            className="flex-1 gap-2 font-semibold text-[15px] text-slate-500 hover:bg-slate-100 rounded-lg h-9 transition-colors"
+         >
+            <MessageCircle className="w-5 h-5" />
+            Comment
+         </Button>
+
+         <Button 
+            variant="ghost" 
+            onClick={handleShare}
+            className="flex-1 gap-2 font-semibold text-[15px] text-slate-500 hover:bg-slate-100 rounded-lg h-9 transition-colors"
+         >
+            <Share2 className="w-5 h-5" />
+            Share
+         </Button>
+      </div>
+
+      {/* --- Comments Section --- */}
+      {(showComments || comments.length > 0) && (
+         <div className="px-4 pb-4 border-t border-slate-200/60 pt-3">
+            
+            {/* View More */}
+            {post.comments > comments.length && comments.length > 0 && (
+               <div className="font-semibold text-slate-500 text-sm hover:underline cursor-pointer mb-3">
+                  View more comments
+               </div>
+            )}
+
+            {/* List */}
+            <div className="space-y-3 mb-4">
+               {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-2 group">
+                     <Avatar className="w-8 h-8 mt-1 cursor-pointer hover:brightness-95">
+                        <AvatarImage src={comment.author.avatar} />
+                        <AvatarFallback>{comment.author.name[0]}</AvatarFallback>
+                     </Avatar>
+                     <div className="flex-1 max-w-[90%]">
+                        <div className="bg-slate-100 rounded-2xl px-3 py-2 inline-block relative">
+                           <span className="font-semibold text-xs text-slate-900 block hover:underline cursor-pointer">
+                              {comment.author.name}
+                           </span>
+                           <span className="text-[15px] text-slate-900 leading-snug">
+                              {comment.text}
+                           </span>
+                           {/* Likes count on comment could go here absolutely positioned */}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5 ml-3 text-xs font-semibold text-slate-500">
+                           <span className="hover:underline cursor-pointer">Like</span>
+                           <span className="hover:underline cursor-pointer">Reply</span>
+                           <span className="font-normal">
+                             {comment.timestamp ? formatDistanceToNow(comment.timestamp.toDate(), { addSuffix: true }).replace('about ', '') : 'Just now'}
+                           </span>
+                        </div>
+                     </div>
+                  </div>
+               ))}
             </div>
 
             {/* Input */}
-            <form onSubmit={handleComment} className="flex gap-3 items-start">
-               <Avatar className="h-9 w-9">
+            <div className="flex gap-2 items-start pt-1">
+               <Avatar className="w-8 h-8 mt-1">
                   <AvatarImage src={userProfile?.photoURL || user?.photoURL || ''} />
                   <AvatarFallback>ME</AvatarFallback>
                </Avatar>
-               <div className="flex-1 relative">
-                 <input 
-                    type="text" 
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Write a comment..." 
-                    className="w-full bg-slate-100 rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-synapse-400 pr-10"
-                 />
-                 <button 
-                    type="submit"
-                    disabled={!commentText.trim()} 
-                    className="absolute right-2 top-2 text-synapse-600 hover:bg-synapse-100 p-1 rounded-full disabled:opacity-50 disabled:hover:bg-transparent"
-                 >
-                    <Send className="w-4 h-4" />
-                 </button>
-               </div>
-            </form>
+               <form onSubmit={handleComment} className="flex-1 relative bg-slate-100 rounded-2xl flex items-center">
+                  <input 
+                     type="text"
+                     value={commentText}
+                     onChange={(e) => setCommentText(e.target.value)}
+                     placeholder="Write a comment..."
+                     className="bg-transparent border-none focus:ring-0 w-full px-3 py-2 text-[15px] placeholder-slate-500 text-slate-900 rounded-2xl"
+                  />
+                  <div className="flex items-center gap-1 pr-2 text-slate-500">
+                     <Smile className="w-4 h-4 hover:text-slate-700 cursor-pointer" />
+                     <Camera className="w-4 h-4 hover:text-slate-700 cursor-pointer" />
+                     <button 
+                        type="submit" 
+                        disabled={!commentText.trim()}
+                        className="p-1 rounded-full text-synapse-600 hover:bg-slate-200 disabled:text-slate-400 disabled:hover:bg-transparent transition-colors"
+                     >
+                        <Send className="w-4 h-4" />
+                     </button>
+                  </div>
+               </form>
+            </div>
+         </div>
+      )}
 
-          </div>
-        )}
-      </div>
     </Card>
   );
 };

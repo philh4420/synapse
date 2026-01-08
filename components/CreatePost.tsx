@@ -1,24 +1,30 @@
 import React, { useState, useRef } from 'react';
-import { Image, Video, Link2, Smile, Send, X, Loader2 } from 'lucide-react';
+import { Image, Video, Smile, X, Loader2, Globe, MapPin, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/Avatar';
+import { Separator } from './ui/Separator';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogTrigger,
+  DialogClose
+} from './ui/Dialog';
 import { uploadToCloudinary } from '../utils/upload';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
-interface CreatePostProps {
-  // onPost prop is removed as we handle logic internally now
-}
-
-export const CreatePost: React.FC<CreatePostProps> = () => {
-  const { user } = useAuth();
+export const CreatePost: React.FC = () => {
+  const { user, userProfile } = useAuth();
   const [content, setContent] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,7 +32,6 @@ export const CreatePost: React.FC<CreatePostProps> = () => {
       const file = e.target.files[0];
       setSelectedImage(file);
       setPreviewUrl(URL.createObjectURL(file));
-      setIsFocused(true);
     }
   };
 
@@ -46,12 +51,11 @@ export const CreatePost: React.FC<CreatePostProps> = () => {
         imageUrl = await uploadToCloudinary(selectedImage);
       }
       
-      // Save post to Firestore
       await addDoc(collection(db, 'posts'), {
         author: {
-          name: user.displayName || 'Anonymous',
+          name: userProfile?.displayName || user.displayName || 'Anonymous',
           handle: user.email ? `@${user.email.split('@')[0]}` : '@user',
-          avatar: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
+          avatar: userProfile?.photoURL || user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
           uid: user.uid
         },
         content: content,
@@ -63,93 +67,153 @@ export const CreatePost: React.FC<CreatePostProps> = () => {
         likedByUsers: []
       });
       
-      // Reset form
+      // Reset
       setContent('');
       removeImage();
-      setIsFocused(false);
+      setIsOpen(false);
     } catch (error) {
       console.error("Failed to create post:", error);
-      alert("Failed to post. Please try again.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  return (
-    <Card className={`p-5 transition-all duration-300 ${isFocused ? 'shadow-xl shadow-synapse-500/10 ring-1 ring-synapse-100' : ''}`}>
-      <div className="flex gap-4">
-        <Avatar className="h-11 w-11 ring-2 ring-slate-50">
-            <AvatarImage src={user?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName}`} />
-            <AvatarFallback>{user?.displayName?.substring(0,2).toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onFocus={() => setIsFocused(true)}
-            placeholder={`What's on your mind, ${user?.displayName?.split(' ')[0]}?`}
-            className="w-full bg-slate-50/50 rounded-xl p-3 min-h-[50px] focus:min-h-[100px] transition-all duration-300 resize-none outline-none text-slate-700 placeholder-slate-400"
-          />
-          
-          {previewUrl && (
-            <div className="relative mt-3 rounded-xl overflow-hidden group">
-              <img src={previewUrl} alt="Preview" className="w-full h-64 object-cover" />
-              <button 
-                onClick={removeImage}
-                className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white p-1.5 rounded-full transition-colors backdrop-blur-sm"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+  const openFileDialog = () => {
+    setIsOpen(true);
+    // Slight delay to allow dialog to mount before clicking input
+    setTimeout(() => fileInputRef.current?.click(), 100);
+  };
 
-          <div className={`
-            flex items-center justify-between mt-3 overflow-hidden transition-all duration-300
-            ${isFocused || content || previewUrl ? 'opacity-100 max-h-14 pt-2' : 'opacity-0 max-h-0'}
-          `}>
-            <div className="flex gap-2">
-              <input 
-                type="file" 
-                ref={fileInputRef}
-                onChange={handleImageSelect}
-                accept="image/*"
-                className="hidden"
-              />
-              <Button 
-                variant="ghost"
-                size="icon"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-synapse-600 bg-synapse-50 hover:bg-synapse-100 transition-colors"
-                title="Add Photo"
-              >
-                <Image className="w-5 h-5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-pink-600 bg-pink-50 hover:bg-pink-100 transition-colors">
-                <Video className="w-5 h-5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors">
-                <Link2 className="w-5 h-5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-yellow-600 bg-yellow-50 hover:bg-yellow-100 transition-colors">
-                <Smile className="w-5 h-5" />
-              </Button>
+  return (
+    <Card className="px-4 pt-3 pb-2 shadow-sm border-slate-200 bg-white">
+      <div className="flex gap-3 mb-3">
+        <Avatar className="h-10 w-10 cursor-pointer hover:brightness-95 transition-all">
+          <AvatarImage src={userProfile?.photoURL || user?.photoURL || ''} />
+          <AvatarFallback>{userProfile?.displayName?.substring(0,2).toUpperCase()}</AvatarFallback>
+        </Avatar>
+        
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogTrigger asChild>
+            <div className="flex-1 bg-slate-100 hover:bg-slate-200/80 rounded-full px-4 py-2.5 cursor-pointer transition-colors text-slate-500 hover:text-slate-600 text-[15px]">
+              What's on your mind, {userProfile?.displayName?.split(' ')[0]}?
             </div>
+          </DialogTrigger>
+          
+          <DialogContent className="sm:max-w-[500px] p-0 gap-0 overflow-hidden rounded-xl">
+            <DialogHeader className="p-4 border-b border-slate-100 relative">
+              <DialogTitle className="text-center text-xl font-bold">Create Post</DialogTitle>
+            </DialogHeader>
             
-            <Button 
-              size="sm" 
-              onClick={handleSubmit} 
-              disabled={(!content.trim() && !selectedImage) || isUploading}
-              className="rounded-lg px-6"
-            >
-              {isUploading ? (
-                <>Posting <Loader2 className="w-3 h-3 ml-2 animate-spin" /></>
-              ) : (
-                <>Post <Send className="w-3 h-3 ml-2" /></>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {/* User Info */}
+              <div className="flex items-center gap-3 mb-4">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={userProfile?.photoURL || user?.photoURL || ''} />
+                  <AvatarFallback>{userProfile?.displayName?.[0]}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="font-semibold text-[15px]">{userProfile?.displayName}</div>
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-md px-2 py-0.5 text-xs font-semibold text-slate-600 w-fit mt-0.5">
+                     <Globe className="w-3 h-3" />
+                     <span>Public</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Input */}
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={`What's on your mind, ${userProfile?.displayName?.split(' ')[0]}?`}
+                className="w-full min-h-[120px] text-lg placeholder:text-slate-500 resize-none outline-none border-none focus:ring-0 p-0"
+              />
+
+              {/* Image Preview */}
+              {previewUrl && (
+                <div className="relative mt-2 rounded-lg overflow-hidden border border-slate-200">
+                  <img src={previewUrl} alt="Preview" className="w-full max-h-[300px] object-cover" />
+                  <div className="absolute top-2 right-2 flex gap-2">
+                     <button className="bg-white p-1.5 rounded-full shadow-sm hover:bg-slate-100" onClick={() => {}}>
+                        <div className="text-sm font-semibold px-2">Edit</div>
+                     </button>
+                     <button 
+                      onClick={removeImage}
+                      className="bg-white p-1.5 rounded-full shadow-sm hover:bg-slate-100"
+                    >
+                      <X className="w-5 h-5 text-slate-700" />
+                    </button>
+                  </div>
+                </div>
               )}
-            </Button>
-          </div>
-        </div>
+              
+              {/* Add to Post Widget */}
+              <div className="mt-4 border border-slate-200 rounded-lg p-3 flex items-center justify-between shadow-sm">
+                 <span className="font-semibold text-sm text-slate-900 pl-1">Add to your post</span>
+                 <div className="flex gap-1">
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 hover:bg-slate-100 rounded-full transition-colors text-green-500"
+                    >
+                       <Image className="w-6 h-6" />
+                    </button>
+                    <button className="p-2 hover:bg-slate-100 rounded-full transition-colors text-blue-500">
+                       <UserPlus className="w-6 h-6" />
+                    </button>
+                    <button className="p-2 hover:bg-slate-100 rounded-full transition-colors text-yellow-500">
+                       <Smile className="w-6 h-6" />
+                    </button>
+                    <button className="p-2 hover:bg-slate-100 rounded-full transition-colors text-red-500">
+                       <MapPin className="w-6 h-6" />
+                    </button>
+                 </div>
+              </div>
+            </div>
+
+            <DialogFooter className="p-4 border-t border-slate-100">
+              <Button 
+                onClick={handleSubmit} 
+                disabled={(!content.trim() && !selectedImage) || isUploading}
+                className="w-full bg-synapse-600 hover:bg-synapse-700 text-white font-semibold h-9 rounded-lg"
+              >
+                {isUploading ? (
+                  <>Posting <Loader2 className="w-4 h-4 ml-2 animate-spin" /></>
+                ) : (
+                  "Post"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
+
+      <Separator className="bg-slate-200/60" />
+
+      <div className="flex items-center justify-between pt-1">
+        <button className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 font-semibold text-[15px]">
+           <Video className="w-6 h-6 text-red-500" />
+           <span className="hidden sm:inline">Live video</span>
+        </button>
+        <button 
+          onClick={openFileDialog}
+          className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 font-semibold text-[15px]"
+        >
+           <Image className="w-6 h-6 text-green-500" />
+           <span className="hidden sm:inline">Photo/video</span>
+        </button>
+        <button className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 font-semibold text-[15px]">
+           <Smile className="w-6 h-6 text-yellow-500" />
+           <span className="hidden sm:inline">Feeling/activity</span>
+        </button>
+      </div>
+      
+      {/* Hidden File Input */}
+      <input 
+        type="file" 
+        ref={fileInputRef}
+        onChange={handleImageSelect}
+        accept="image/*"
+        className="hidden"
+      />
     </Card>
   );
 };
