@@ -5,6 +5,9 @@ export interface UserProfile {
   photoURL: string | null;
   coverURL?: string | null;
   role?: 'admin' | 'user';
+  bio?: string;
+  followers?: string[];
+  following?: string[];
 }
 
 export interface Post {
@@ -39,4 +42,11 @@ export interface NavItem {
 
 export interface SiteSettings {
   signupEnabled: boolean;
+}
+
+export interface Trend {
+  id: string;
+  tag: string;
+  posts: string; // e.g. "54k" or just a number converted to string
+  count?: number; // numeric value for sorting
 }

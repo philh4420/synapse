@@ -47,11 +47,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
               `} 
             />
             <span className="font-medium text-sm tracking-wide">{item.label}</span>
-            {item.id === 'notifications' && (
-              <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm shadow-red-200">
-                3
-              </span>
-            )}
           </button>
         ))}
 

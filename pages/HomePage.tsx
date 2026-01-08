@@ -3,6 +3,7 @@ import { Sidebar } from '../components/Sidebar';
 import { Feed } from '../components/Feed';
 import { RightPanel } from '../components/RightPanel';
 import { AdminPanel } from '../components/AdminPanel';
+import { Profile } from '../components/Profile';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +16,8 @@ export const HomePage: React.FC = () => {
     switch (activeTab) {
       case 'feed':
         return <Feed />;
+      case 'profile':
+        return <Profile />;
       case 'admin':
         return <AdminPanel />;
       default:
