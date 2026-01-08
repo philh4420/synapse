@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ThumbsUp, MessageCircle, Share2, MoreHorizontal, Globe, 
-  Trash2, Send, X, MessageSquare, Users, Lock, Edit3, Camera, Loader2, Smile, Gift, Search
+  Trash2, Send, X, MessageSquare, Users, Lock, Edit3, Camera, Loader2, Smile, Gift, Search, AlertTriangle
 } from 'lucide-react';
 import { Post as PostType, ReactionType, Comment } from '../types';
 import { formatDistanceToNow } from 'date-fns';
@@ -31,6 +31,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "./ui/Popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from './ui/Dialog';
 import { cn } from '../lib/utils';
 
 // --- Assets ---
@@ -81,8 +89,13 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
   const [editImages, setEditImages] = useState<string[]>(initialPost.images || (initialPost.image ? [initialPost.image] : []));
   const [isSaving, setIsSaving] = useState(false);
   
-  // Delete
+  // Delete State
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteState, setDeleteState] = useState<{
+    isOpen: boolean;
+    type: 'post' | 'comment';
+    targetId?: string;
+  }>({ isOpen: false, type: 'post' });
   
   // Optimistic Reactions
   const [currentReaction, setCurrentReaction] = useState<ReactionType | null>(null);
@@ -94,7 +107,6 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
   // -- Effects --
 
   // 1. Real-time Post Listener
-  // This ensures that if someone else likes the post, it updates instantly.
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'posts', initialPost.id), (docSnap) => {
       if (docSnap.exists()) {
@@ -309,15 +321,9 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
       }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
-    if (!confirm("Delete this comment?")) return;
-    try {
-       await deleteDoc(doc(db, 'posts', currentPost.id, 'comments', commentId));
-       await updateDoc(doc(db, 'posts', currentPost.id), { comments: increment(-1) });
-       toast("Comment deleted", "success");
-    } catch (error) {
-       toast("Failed to delete comment", "error");
-    }
+  // Trigger Delete Confirmation for Comment
+  const handleDeleteComment = (commentId: string) => {
+    setDeleteState({ isOpen: true, type: 'comment', targetId: commentId });
   };
 
   // Toggle Like on Comment
@@ -373,34 +379,43 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
     }
   };
 
-  const handleDeletePost = async () => {
-    if (!confirm("Are you sure you want to delete this post?")) return;
-    setIsDeleting(true);
-    try {
-      // Use batch to delete comments and post atomicaly (cascade delete)
-      const batch = writeBatch(db);
-      
-      // 1. Get all comments
-      const commentsRef = collection(db, 'posts', currentPost.id, 'comments');
-      const commentsSnapshot = await getDocs(commentsRef);
-      
-      // 2. Queue comment deletes
-      commentsSnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-      
-      // 3. Queue post delete
-      const postRef = doc(db, 'posts', currentPost.id);
-      batch.delete(postRef);
-      
-      // 4. Commit batch
-      await batch.commit();
+  // Trigger Delete Confirmation for Post
+  const handleDeletePost = () => {
+    setDeleteState({ isOpen: true, type: 'post' });
+  };
 
-      toast("Post deleted", "success");
-    } catch (error) {
-      console.error("Error deleting post:", error);
-      toast("Failed to delete post", "error");
-      setIsDeleting(false);
+  // Execute Deletion
+  const confirmDelete = async () => {
+    setDeleteState(prev => ({ ...prev, isOpen: false })); // Close modal immediately
+    const type = deleteState.type;
+    const targetId = deleteState.targetId;
+
+    if (type === 'post') {
+      setIsDeleting(true);
+      try {
+        const batch = writeBatch(db);
+        const commentsRef = collection(db, 'posts', currentPost.id, 'comments');
+        const commentsSnapshot = await getDocs(commentsRef);
+        commentsSnapshot.forEach((doc) => batch.delete(doc.ref));
+        
+        const postRef = doc(db, 'posts', currentPost.id);
+        batch.delete(postRef);
+        
+        await batch.commit();
+        toast("Post deleted", "success");
+      } catch (error) {
+        console.error("Error deleting post:", error);
+        toast("Failed to delete post", "error");
+        setIsDeleting(false);
+      }
+    } else if (type === 'comment' && targetId) {
+      try {
+        await deleteDoc(doc(db, 'posts', currentPost.id, 'comments', targetId));
+        await updateDoc(doc(db, 'posts', currentPost.id), { comments: increment(-1) });
+        toast("Comment deleted", "success");
+      } catch (error) {
+        toast("Failed to delete comment", "error");
+      }
     }
   };
 
@@ -510,6 +525,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
 
   // -- Render Main --
   return (
+    <>
     <Card className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-visible animate-in fade-in duration-300">
       
       {/* Header */}
@@ -712,14 +728,16 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
                                   {comment.text && <span className="text-[15px] text-slate-900 leading-snug break-words">{formatTextWithLinks(comment.text)}</span>}
                                   
                                   {/* Edit/Delete Menu */}
-                                  {(user?.uid === comment.author.uid) && (
+                                  {(user?.uid === comment.author.uid || isAuthor) && (
                                      <div className="absolute top-2 right-2 opacity-0 group-hover/comment:opacity-100 transition-opacity">
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
                                             <button className="p-1 hover:bg-slate-200 rounded-full"><MoreHorizontal className="w-4 h-4 text-slate-500" /></button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="start">
-                                            <DropdownMenuItem onClick={() => { setEditingCommentId(comment.id); setEditCommentText(comment.text); }}>Edit</DropdownMenuItem>
+                                            {user?.uid === comment.author.uid && (
+                                              <DropdownMenuItem onClick={() => { setEditingCommentId(comment.id); setEditCommentText(comment.text); }}>Edit</DropdownMenuItem>
+                                            )}
                                             <DropdownMenuItem onClick={() => handleDeleteComment(comment.id)} className="text-red-600">Delete</DropdownMenuItem>
                                           </DropdownMenuContent>
                                         </DropdownMenu>
@@ -870,5 +888,31 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
         </>
       )}
     </Card>
+
+    <Dialog open={deleteState.isOpen} onOpenChange={(open) => setDeleteState(prev => ({...prev, isOpen: open}))}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              {deleteState.type === 'post' ? 'Delete Post?' : 'Delete Comment?'}
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              {deleteState.type === 'post' 
+                ? "Are you sure you want to delete this post? This action cannot be undone and will remove all comments and reactions."
+                : "Are you sure you want to delete this comment? This action cannot be undone."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setDeleteState(prev => ({...prev, isOpen: false}))}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    </>
   );
 };
