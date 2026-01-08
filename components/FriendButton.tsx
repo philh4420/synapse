@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserPlus, UserCheck, UserMinus, Loader2, X } from 'lucide-react';
+import { UserPlus, UserCheck, UserMinus, Loader2, X, UserX } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { 
-  collection, query, where, getDocs, addDoc, deleteDoc, 
+  collection, query, where, addDoc, deleteDoc, 
   updateDoc, doc, onSnapshot, serverTimestamp, arrayUnion, arrayRemove 
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
@@ -15,14 +15,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/DropdownMenu';
+import { cn } from '../lib/utils';
 
 interface FriendButtonProps {
   targetUid: string;
   className?: string;
   onStatusChange?: () => void;
+  size?: 'default' | 'sm' | 'lg' | 'icon';
 }
 
-export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className, onStatusChange }) => {
+export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className, onStatusChange, size = 'default' }) => {
   const { user, userProfile } = useAuth();
   const { toast } = useToast();
   
@@ -34,52 +36,51 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
   useEffect(() => {
     if (!user || !targetUid) return;
 
-    // Check if already friends via userProfile.friends array (faster than query)
+    // Immediate check from profile
     if (userProfile?.friends?.includes(targetUid)) {
       setStatus('friends');
       setLoading(false);
     }
 
-    // Listener for Friend Requests
-    // We check both: Sent by Me (pending) OR Sent to Me (pending)
-    const q1 = query(
+    // Listen for requests sent BY me
+    const qSent = query(
       collection(db, 'friend_requests'),
       where('senderId', '==', user.uid),
       where('receiverId', '==', targetUid)
     );
 
-    const q2 = query(
+    // Listen for requests sent TO me
+    const qReceived = query(
       collection(db, 'friend_requests'),
       where('senderId', '==', targetUid),
       where('receiverId', '==', user.uid)
     );
 
-    // Combine listeners (Manual implementation since Firestore OR queries are limited here)
-    const unsub1 = onSnapshot(q1, (snap) => {
+    const unsubSent = onSnapshot(qSent, (snap) => {
       if (!snap.empty) {
         setStatus('pending_sent');
         setRequestId(snap.docs[0].id);
-      } else if (status === 'pending_sent') {
-        // If it was sent but now gone, revert to none (unless strictly friended)
-        if (!userProfile?.friends?.includes(targetUid)) setStatus('none');
+      } else {
+        if (status === 'pending_sent') setStatus('none');
       }
       setLoading(false);
     });
 
-    const unsub2 = onSnapshot(q2, (snap) => {
+    const unsubReceived = onSnapshot(qReceived, (snap) => {
       if (!snap.empty) {
         setStatus('pending_received');
         setRequestId(snap.docs[0].id);
-      } else if (status === 'pending_received') {
-        if (!userProfile?.friends?.includes(targetUid)) setStatus('none');
+      } else {
+        if (status === 'pending_received') setStatus('none');
       }
       setLoading(false);
     });
 
-    return () => { unsub1(); unsub2(); };
+    return () => { unsubSent(); unsubReceived(); };
   }, [user, targetUid, userProfile?.friends]);
 
-  const sendRequest = async () => {
+  const sendRequest = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!user) return;
     setActionLoading(true);
     try {
@@ -90,7 +91,6 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
         timestamp: serverTimestamp()
       });
 
-      // Notification
       await addDoc(collection(db, 'notifications'), {
         recipientUid: targetUid,
         sender: {
@@ -105,14 +105,14 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
 
       toast("Friend request sent", "success");
     } catch (e) {
-      console.error(e);
       toast("Failed to send request", "error");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const cancelRequest = async () => {
+  const cancelRequest = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!requestId) return;
     setActionLoading(true);
     try {
@@ -127,22 +127,15 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
     }
   };
 
-  const acceptRequest = async () => {
+  const acceptRequest = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!requestId || !user) return;
     setActionLoading(true);
     try {
-      // 1. Delete request
       await deleteDoc(doc(db, 'friend_requests', requestId));
+      await updateDoc(doc(db, 'users', user.uid), { friends: arrayUnion(targetUid) });
+      await updateDoc(doc(db, 'users', targetUid), { friends: arrayUnion(user.uid) });
 
-      // 2. Add to both users' friend lists
-      await updateDoc(doc(db, 'users', user.uid), {
-        friends: arrayUnion(targetUid)
-      });
-      await updateDoc(doc(db, 'users', targetUid), {
-        friends: arrayUnion(user.uid)
-      });
-
-      // 3. Notify sender
       await addDoc(collection(db, 'notifications'), {
         recipientUid: targetUid,
         sender: {
@@ -159,24 +152,23 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
       toast("You are now friends", "success");
       if (onStatusChange) onStatusChange();
     } catch (e) {
-      console.error(e);
       toast("Failed to accept", "error");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const unfriend = async () => {
-    if (!confirm("Are you sure you want to remove this friend?")) return;
+  const unfriend = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!user) return;
+    
+    // Note: We don't use window.confirm here to keep it UI agnostic, usually controlled by a Dialog, 
+    // but for the dropdown action, it's direct.
+    
     setActionLoading(true);
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
-        friends: arrayRemove(targetUid)
-      });
-      await updateDoc(doc(db, 'users', targetUid), {
-        friends: arrayRemove(user.uid)
-      });
+      await updateDoc(doc(db, 'users', user.uid), { friends: arrayRemove(targetUid) });
+      await updateDoc(doc(db, 'users', targetUid), { friends: arrayRemove(user.uid) });
       setStatus('none');
       toast("Friend removed", "info");
       if (onStatusChange) onStatusChange();
@@ -187,20 +179,26 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
     }
   };
 
-  if (loading) return <Button variant="secondary" disabled size="sm" className={className}><Loader2 className="w-4 h-4 animate-spin" /></Button>;
+  if (loading) {
+    return (
+      <Button variant="secondary" disabled size={size} className={className}>
+        <Loader2 className="w-4 h-4 animate-spin" />
+      </Button>
+    );
+  }
 
   if (status === 'friends') {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" className={`gap-2 bg-slate-200 text-slate-900 hover:bg-slate-300 ${className}`} disabled={actionLoading}>
+          <Button variant="secondary" size={size} className={cn("gap-2 font-semibold", className)} disabled={actionLoading}>
             <UserCheck className="w-4 h-4" />
             Friends
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem className="text-red-600 focus:text-red-700 cursor-pointer" onClick={unfriend}>
-             <UserMinus className="w-4 h-4 mr-2" /> Unfriend
+          <DropdownMenuItem className="text-destructive focus:text-destructive cursor-pointer gap-2" onClick={unfriend}>
+             <UserMinus className="w-4 h-4" /> Unfriend
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -211,11 +209,12 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
     return (
       <Button 
         variant="secondary" 
+        size={size}
         onClick={cancelRequest} 
-        disabled={actionLoading}
-        className={`gap-2 bg-slate-200 text-slate-700 hover:bg-slate-300 ${className}`}
+        isLoading={actionLoading}
+        className={cn("gap-2 text-slate-600", className)}
       >
-        {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+        {!actionLoading && <X className="w-4 h-4" />}
         Cancel Request
       </Button>
     );
@@ -223,20 +222,22 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
 
   if (status === 'pending_received') {
     return (
-      <div className="flex gap-2">
+      <div className="flex gap-2 w-full">
          <Button 
+           variant="primary"
+           size={size}
            onClick={acceptRequest} 
-           disabled={actionLoading}
-           className={`gap-2 bg-synapse-600 text-white hover:bg-synapse-700 ${className}`}
+           isLoading={actionLoading}
+           className={cn("gap-2 flex-1", className)}
          >
-           {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
            Confirm
          </Button>
          <Button 
            variant="secondary"
+           size={size}
            onClick={cancelRequest} 
            disabled={actionLoading}
-           className="bg-slate-200 text-slate-700 hover:bg-slate-300"
+           className="flex-1"
          >
            Delete
          </Button>
@@ -246,11 +247,13 @@ export const FriendButton: React.FC<FriendButtonProps> = ({ targetUid, className
 
   return (
     <Button 
+      variant="primary" 
+      size={size}
       onClick={sendRequest} 
-      disabled={actionLoading}
-      className={`gap-2 bg-synapse-600 text-white hover:bg-synapse-700 ${className}`}
+      isLoading={actionLoading}
+      className={cn("gap-2 font-semibold", className)}
     >
-      {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+      {!actionLoading && <UserPlus className="w-4 h-4" />}
       Add Friend
     </Button>
   );
