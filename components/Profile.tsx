@@ -6,11 +6,13 @@ import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestor
 import { db } from '../firebaseConfig';
 import { MapPin, Link as LinkIcon, Calendar, Edit3, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { EditProfileDialog } from './EditProfileDialog';
 
 export const Profile: React.FC = () => {
   const { userProfile, user } = useAuth();
   const [posts, setPosts] = useState<PostType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -64,7 +66,10 @@ export const Profile: React.FC = () => {
               alt={userProfile.displayName || 'User'} 
               className="w-32 h-32 rounded-full border-4 border-white shadow-md bg-white object-cover"
             />
-            <button className="mb-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm shadow-sm">
+            <button 
+              onClick={() => setIsEditProfileOpen(true)}
+              className="mb-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm shadow-sm"
+            >
               <Edit3 className="w-4 h-4" />
               Edit Profile
             </button>
@@ -80,14 +85,23 @@ export const Profile: React.FC = () => {
           </p>
 
           <div className="flex flex-wrap gap-y-2 gap-x-6 mt-4 text-sm text-slate-500">
-            <div className="flex items-center gap-1.5">
-              <MapPin className="w-4 h-4" />
-              <span>Digital Nomad</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <LinkIcon className="w-4 h-4" />
-              <a href="#" className="text-synapse-600 hover:underline">synapse.com</a>
-            </div>
+            {userProfile.work && (
+              <div className="flex items-center gap-1.5">
+                 <span className="font-semibold">{userProfile.work}</span>
+              </div>
+            )}
+             {userProfile.location && (
+              <div className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4" />
+                <span>{userProfile.location}</span>
+              </div>
+            )}
+            {userProfile.website && (
+              <div className="flex items-center gap-1.5">
+                <LinkIcon className="w-4 h-4" />
+                <a href={userProfile.website} target="_blank" rel="noopener noreferrer" className="text-synapse-600 hover:underline">{userProfile.website.replace(/^https?:\/\//, '')}</a>
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
               <Calendar className="w-4 h-4" />
               <span>Joined {format(new Date(), 'MMMM yyyy')}</span>
@@ -134,6 +148,8 @@ export const Profile: React.FC = () => {
           )}
         </div>
       )}
+      
+      <EditProfileDialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen} />
     </div>
   );
 };

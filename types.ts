@@ -9,6 +9,13 @@ export interface UserProfile {
   followers?: string[];
   following?: string[];
   birthDate?: string; // ISO Date string YYYY-MM-DD
+  
+  // Extended Details
+  work?: string;
+  education?: string;
+  location?: string;
+  relationshipStatus?: 'Single' | 'In a relationship' | 'Married' | 'Complicated';
+  website?: string;
 }
 
 export interface Post {
