@@ -24,7 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   ];
 
   return (
-    <div className="hidden lg:block w-[280px] xl:w-[360px] h-[calc(100vh-56px)] overflow-y-auto fixed left-0 top-14 p-4 hover:overflow-y-auto hide-scrollbar">
+    <div className="hidden lg:block w-[280px] xl:w-[360px] h-[calc(100vh-90px)] overflow-y-auto fixed left-0 top-[5.5rem] p-4 hover:overflow-y-auto hide-scrollbar">
       <ul className="space-y-1 mb-4">
         <li 
             onClick={() => setActiveTab('profile')}

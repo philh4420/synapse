@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Search, Home, Compass, Users, LayoutGrid, MessageCircle, Bell, ChevronDown, 
+  Search, Home, Users, LayoutGrid, MessageCircle, Bell, ChevronDown, 
   Activity, Shield, Store, MonitorPlay, X, LogOut, Settings, HelpCircle, 
-  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, UserPlus, UserCheck
+  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, UserPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, limit, onSnapshot, orderBy, updateDoc, doc, getDocs } from 'firebase/firestore';
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
   const navItems = [
     { id: 'feed', icon: Home, label: 'Home' },
-    { id: 'friends', icon: Users, label: 'Friends' }, // Updated from Groups to Friends for better FB mimic
+    { id: 'friends', icon: Users, label: 'Friends' }, 
     { id: 'videos', icon: MonitorPlay, label: 'Watch' },
     { id: 'marketplace', icon: Store, label: 'Marketplace' },
   ];
@@ -175,8 +175,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
         break;
       case 'friend_accept':
         message = 'accepted your friend request';
-        targetTab = 'profile'; // Or friends
-        icon = <div className="absolute -bottom-1 -right-1 bg-green-600 rounded-full p-1 border-2 border-white"><UserCheck className="w-3 h-3 text-white fill-current" /></div>;
+        targetTab = 'profile'; 
+        icon = <div className="absolute -bottom-1 -right-1 bg-green-600 rounded-full p-1 border-2 border-white"><Activity className="w-3 h-3 text-white fill-current" /></div>;
         break;
       default:
         message = 'interacted with your content';
@@ -214,27 +214,27 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   };
 
   return (
-    <div className="fixed top-0 left-0 right-0 h-14 bg-white shadow-sm z-50 flex items-center justify-between px-4 select-none">
+    <div className="fixed top-0 lg:top-4 left-0 lg:left-1/2 lg:-translate-x-1/2 w-full lg:w-[96%] max-w-[1920px] h-16 bg-white/80 backdrop-blur-xl border-b lg:border border-white/40 shadow-sm lg:shadow-lg lg:shadow-black/5 lg:rounded-2xl z-50 flex items-center justify-between px-4 select-none transition-all duration-300">
       
       {/* --- Left: Logo & Search --- */}
-      <div className="flex items-center gap-2 z-50 relative">
+      <div className="flex items-center gap-3 z-50 relative">
         <div 
           onClick={() => setActiveTab('feed')}
-          className="w-10 h-10 bg-gradient-to-br from-synapse-600 to-synapse-700 rounded-full flex items-center justify-center cursor-pointer hover:brightness-110 transition-all flex-shrink-0"
+          className="w-10 h-10 bg-gradient-to-br from-synapse-500 to-synapse-700 rounded-full flex items-center justify-center cursor-pointer hover:scale-105 transition-all flex-shrink-0 shadow-[0_0_15px_rgba(99,102,241,0.4)]"
         >
            <Activity className="text-white w-6 h-6" />
         </div>
         
         {/* Search Input */}
         <div className="relative hidden xl:block ml-1" ref={searchRef}>
-           <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4" />
+           <Search className={cn("absolute left-3 top-2.5 w-4 h-4 transition-colors", isSearching ? "text-synapse-600" : "text-slate-400")} />
            <input 
              type="text" 
              value={searchQuery}
              onChange={(e) => { setSearchQuery(e.target.value); setIsSearching(true); }}
              onFocus={() => setIsSearching(true)}
              placeholder="Search Synapse" 
-             className="bg-slate-100 rounded-full py-2.5 pl-10 pr-4 w-60 text-[15px] focus:outline-none focus:ring-1 focus:ring-synapse-500 placeholder-slate-500 text-slate-900 transition-all hover:bg-slate-200/70"
+             className="bg-slate-100/50 hover:bg-slate-100/80 rounded-full py-2.5 pl-10 pr-4 w-60 focus:w-72 text-[15px] focus:outline-none focus:ring-2 focus:ring-synapse-500/20 focus:bg-white placeholder-slate-500 text-slate-900 transition-all duration-300 border border-transparent focus:border-synapse-200"
            />
            {searchQuery && (
              <button 
@@ -246,12 +246,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
            )}
 
             {isSearching && searchQuery && (
-              <div className="absolute top-12 left-0 w-[300px] bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
+              <div className="absolute top-14 left-0 w-full bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-white/50 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
                 {searchResults.length > 0 ? (
                   searchResults.map(result => (
                     <div 
                       key={result.uid}
-                      className="px-4 py-2 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
+                      className="px-4 py-2 hover:bg-synapse-50 cursor-pointer flex items-center gap-3 transition-colors"
                       onClick={() => {
                         setSearchQuery('');
                         setIsSearching(false);
@@ -276,7 +276,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             )}
         </div>
 
-        <Button variant="ghost" size="icon" className="xl:hidden rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600">
+        <Button variant="ghost" size="icon" className="xl:hidden rounded-full bg-slate-100/50 hover:bg-slate-100 text-slate-600">
             <Search className="w-5 h-5" />
         </Button>
       </div>
@@ -284,35 +284,34 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       {/* --- Center: Navigation --- */}
       <TooltipProvider delayDuration={0}>
       <div className="hidden md:flex flex-1 justify-center max-w-2xl mx-auto h-full absolute left-0 right-0 pointer-events-none">
-         <div className="flex w-full justify-center h-full pointer-events-auto gap-1 lg:gap-2">
+         <div className="flex w-full justify-center items-center h-full pointer-events-auto gap-2 lg:gap-4">
             {navItems.map(item => (
                 <Tooltip key={item.id}>
                   <TooltipTrigger asChild>
                     <button
                         onClick={() => setActiveTab(item.id)}
-                        className="flex-1 flex items-center justify-center relative group h-full max-w-[110px]"
+                        className="relative group h-12 w-28 flex items-center justify-center"
                     >
                         <div className={cn(
-                            "w-full max-w-[110px] h-[90%] my-auto mx-1 rounded-lg flex items-center justify-center transition-colors",
-                            activeTab === item.id ? '' : 'hover:bg-slate-100'
+                            "w-full h-full rounded-xl flex items-center justify-center transition-all duration-300",
+                            activeTab === item.id 
+                              ? 'bg-synapse-50 text-synapse-600 shadow-sm' 
+                              : 'text-slate-500 hover:bg-slate-100/50 hover:text-slate-700'
                         )}>
                             <item.icon 
                               className={cn(
-                                "w-[28px] h-[28px] transition-colors duration-200",
-                                activeTab === item.id ? 'text-synapse-600 fill-synapse-600' : 'text-slate-500 group-hover:text-slate-600'
+                                "w-[26px] h-[26px] transition-transform duration-300",
+                                activeTab === item.id ? 'scale-110' : 'group-hover:scale-105'
                               )} 
                               strokeWidth={activeTab === item.id ? 2.5 : 2} 
                             />
                             {item.id === 'friends' && notifications.some(n => n.type === 'friend_request' && !n.read) && (
-                                <div className="absolute top-2 right-8 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                                <div className="absolute top-3 right-8 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white shadow-sm" />
                             )}
                         </div>
-                        {activeTab === item.id && (
-                            <div className="absolute bottom-0 h-[3px] bg-synapse-600 w-full max-w-[110px] rounded-t-full"></div>
-                        )}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-slate-800 text-white border-0">
+                  <TooltipContent side="bottom" className="bg-slate-900 text-white border-0 rounded-lg px-3 py-1.5 text-xs font-medium">
                     <p>{item.label}</p>
                   </TooltipContent>
                 </Tooltip>
@@ -328,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
         <div className="md:hidden">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-900 h-10 w-10">
+              <Button variant="ghost" size="icon" className="rounded-full bg-slate-100/50 hover:bg-slate-100 text-slate-900 h-10 w-10">
                 <Menu className="w-6 h-6" />
               </Button>
             </SheetTrigger>
@@ -374,14 +373,14 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
         {/* User Capsule (Profile Link) - Desktop */}
         <div 
-          className="hidden xl:flex items-center gap-2 hover:bg-slate-100 p-1 pr-3 pl-1 rounded-full cursor-pointer transition-colors select-none" 
+          className="hidden xl:flex items-center gap-2 hover:bg-slate-100/50 p-1.5 pr-4 pl-1.5 rounded-full cursor-pointer transition-all border border-transparent hover:border-slate-200 select-none" 
           onClick={() => setActiveTab('profile')}
         >
-             <Avatar className="w-7 h-7 border border-slate-200">
+             <Avatar className="w-8 h-8 border border-slate-200 shadow-sm">
                <AvatarImage src={userProfile?.photoURL || user?.photoURL || ''} />
                <AvatarFallback>{userProfile?.displayName?.substring(0,2).toUpperCase()}</AvatarFallback>
              </Avatar>
-             <span className="font-semibold text-[15px] text-slate-900">{userProfile?.displayName?.split(' ')[0]}</span>
+             <span className="font-semibold text-[14px] text-slate-700">{userProfile?.displayName?.split(' ')[0]}</span>
         </div>
 
         {/* Buttons */}
@@ -390,15 +389,15 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           {/* Main Menu Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="hidden md:inline-flex rounded-full bg-slate-100 hover:bg-slate-200 text-slate-900 h-10 w-10">
+              <Button variant="ghost" size="icon" className="hidden md:inline-flex rounded-full bg-slate-100/50 hover:bg-synapse-50 text-slate-700 hover:text-synapse-600 h-10 w-10 transition-colors">
                   <LayoutGrid className="w-5 h-5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[320px] p-4 bg-slate-50" align="end">
+            <PopoverContent className="w-[320px] p-4 bg-slate-50/80 backdrop-blur-xl border-white/40" align="end">
                <h3 className="text-xl font-bold mb-4 px-2">Menu</h3>
-               <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
-                  <div className="p-3 border-b border-slate-100">
-                    <input type="text" placeholder="Search menu" className="w-full bg-slate-100 rounded-full px-3 py-2 text-sm focus:outline-none" />
+               <div className="bg-white/80 rounded-xl shadow-sm border border-white/50 overflow-hidden mb-4">
+                  <div className="p-3 border-b border-slate-100/50">
+                    <input type="text" placeholder="Search menu" className="w-full bg-slate-100/50 rounded-full px-3 py-2 text-sm focus:outline-none" />
                   </div>
                   <div className="p-2 space-y-1">
                      <p className="px-2 py-1 text-xs font-semibold text-slate-500 uppercase">Social</p>
@@ -407,7 +406,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                      <MenuLink icon={Star} label="Favorites" sub="View posts from your favorite people" />
                   </div>
                </div>
-               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+               <div className="bg-white/80 rounded-xl shadow-sm border border-white/50 overflow-hidden">
                    <div className="p-2 space-y-1">
                       <p className="px-2 py-1 text-xs font-semibold text-slate-500 uppercase">Create</p>
                       <MenuLink icon={PenTool} label="Post" />
@@ -420,11 +419,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           {/* Messenger Popover */}
           <Popover>
             <PopoverTrigger asChild>
-               <Button variant="ghost" size="icon" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-900 h-10 w-10">
+               <Button variant="ghost" size="icon" className="rounded-full bg-slate-100/50 hover:bg-synapse-50 text-slate-700 hover:text-synapse-600 h-10 w-10 transition-colors">
                   <MessageCircle className="w-5 h-5" />
                </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[360px] p-0 flex flex-col h-[400px]" align="end">
+            <PopoverContent className="w-[360px] p-0 flex flex-col h-[400px] bg-white/90 backdrop-blur-xl border-white/50" align="end">
                <div className="p-4 pb-2">
                  <div className="flex justify-between items-center mb-3">
                    <h3 className="text-2xl font-bold">Chats</h3>
@@ -433,7 +432,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                       <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"><MessageSquare className="w-5 h-5" /></Button>
                    </div>
                  </div>
-                 <input className="w-full bg-slate-100 rounded-full px-4 py-2 text-sm focus:outline-none placeholder-slate-500" placeholder="Search Messenger" />
+                 <input className="w-full bg-slate-100/80 rounded-full px-4 py-2 text-sm focus:outline-none placeholder-slate-500" placeholder="Search Messenger" />
                </div>
                <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-8 text-center">
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3">
@@ -442,7 +441,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   <p className="font-semibold">No messages yet</p>
                   <p className="text-sm mt-1">Start a conversation with your friends.</p>
                </div>
-               <div className="p-3 border-t border-slate-100 text-center">
+               <div className="p-3 border-t border-slate-100/50 text-center">
                   <span className="text-synapse-600 font-semibold text-sm hover:underline cursor-pointer">See all in Messenger</span>
                </div>
             </PopoverContent>
@@ -455,19 +454,21 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   variant="ghost" 
                   size="icon" 
                   className={cn(
-                    "rounded-full hover:bg-slate-200 text-slate-900 h-10 w-10 relative",
-                    unreadCount > 0 ? "bg-synapse-100 text-synapse-700" : "bg-slate-100"
+                    "rounded-full h-10 w-10 relative transition-all duration-300",
+                    unreadCount > 0 
+                        ? "bg-synapse-100 text-synapse-600 hover:bg-synapse-200" 
+                        : "bg-slate-100/50 hover:bg-synapse-50 text-slate-700 hover:text-synapse-600"
                   )}
                >
-                  <Bell className="w-5 h-5" />
+                  <Bell className={cn("w-5 h-5", unreadCount > 0 && "fill-current")} />
                   {unreadCount > 0 && (
-                     <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white">
+                     <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
                         {unreadCount > 9 ? '9+' : unreadCount}
-                     </div>
+                     </span>
                   )}
                </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[360px] p-0 h-[80vh] max-h-[500px] flex flex-col" align="end">
+            <PopoverContent className="w-[360px] p-0 h-[80vh] max-h-[500px] flex flex-col bg-white/95 backdrop-blur-xl border-white/50" align="end">
                <div className="p-4 pb-2 flex justify-between items-center">
                  <h3 className="text-2xl font-bold">Notifications</h3>
                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"><MoreHorizontal className="w-5 h-5 text-slate-600" /></Button>
@@ -475,7 +476,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                <div className="px-4 py-2 flex justify-between items-center">
                   <div className="flex gap-2">
                      <button className="bg-synapse-100 text-synapse-700 px-3 py-1.5 rounded-full text-sm font-semibold">All</button>
-                     <button className="hover:bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors">Unread</button>
+                     <button className="hover:bg-slate-100/80 text-slate-600 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors">Unread</button>
                   </div>
                   {unreadCount > 0 && (
                      <button 
@@ -506,14 +507,14 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           {/* Account Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-               <Button variant="ghost" size="icon" className="hidden md:inline-flex rounded-full bg-slate-100 hover:bg-slate-200 text-slate-900 h-10 w-10 outline-none focus-visible:ring-0 ring-0">
+               <Button variant="ghost" size="icon" className="hidden md:inline-flex rounded-full bg-slate-100/50 hover:bg-slate-100 text-slate-700 h-10 w-10 outline-none focus-visible:ring-0 ring-0">
                   <div className="relative">
                     <ChevronDown className="w-6 h-6" />
                   </div>
                </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-[360px] p-2" align="end">
-                <div className="shadow-[0_2px_12px_rgba(0,0,0,0.1)] rounded-xl p-1 mb-2">
+            <DropdownMenuContent className="w-[360px] p-2 bg-white/95 backdrop-blur-xl border-white/50" align="end">
+                <div className="shadow-[0_4px_20px_rgba(0,0,0,0.05)] bg-white rounded-xl p-1 mb-2 border border-slate-100">
                     <div 
                       onClick={() => setActiveTab('profile')}
                       className="flex items-center gap-3 p-3 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors"
@@ -536,10 +537,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
                 <DropdownMenuGroup>
                     <DropdownMenuSub>
-                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer">
+                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer hover:bg-slate-50">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
-                                    <Settings className="w-5 h-5 text-slate-800" />
+                                <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
+                                    <Settings className="w-5 h-5 text-slate-700" />
                                 </div>
                                 <span className="font-medium text-slate-900">Settings & privacy</span>
                             </div>
@@ -553,10 +554,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                     </DropdownMenuSub>
 
                     <DropdownMenuSub>
-                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer">
+                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer hover:bg-slate-50">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
-                                    <HelpCircle className="w-5 h-5 text-slate-800" />
+                                <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
+                                    <HelpCircle className="w-5 h-5 text-slate-700" />
                                 </div>
                                 <span className="font-medium text-slate-900">Help & support</span>
                             </div>
@@ -569,10 +570,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                     </DropdownMenuSub>
 
                     <DropdownMenuSub>
-                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer">
+                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer hover:bg-slate-50">
                             <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center">
-                                    <Moon className="w-5 h-5 text-slate-800" />
+                                <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
+                                    <Moon className="w-5 h-5 text-slate-700" />
                                 </div>
                                 <span className="font-medium text-slate-900">Display & accessibility</span>
                             </div>
@@ -586,12 +587,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 </DropdownMenuGroup>
 
                 <DropdownMenuItem 
-                    className="py-2.5 px-3 rounded-lg cursor-pointer focus:bg-slate-100"
+                    className="py-2.5 px-3 rounded-lg cursor-pointer focus:bg-slate-50 mt-1"
                     onClick={() => logout()}
                 >
                     <div className="flex items-center gap-3 w-full">
-                        <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center group-hover:bg-slate-300 transition-colors">
-                            <LogOut className="w-5 h-5 text-slate-800" />
+                        <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                            <LogOut className="w-5 h-5 text-slate-700" />
                         </div>
                         <span className="font-medium text-slate-900">Log Out</span>
                     </div>
@@ -611,8 +612,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
 // Helper Components for Menu
 const MenuLink: React.FC<{ icon: any, label: string, sub?: string }> = ({ icon: Icon, label, sub }) => (
-  <div className="flex items-center gap-3 p-2 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors">
-      <Icon className="w-6 h-6 text-slate-700" />
+  <div className="flex items-center gap-3 p-2 hover:bg-slate-100/50 rounded-lg cursor-pointer transition-colors group">
+      <Icon className="w-6 h-6 text-slate-600 group-hover:text-synapse-600 transition-colors" />
       <div>
          <p className="font-medium text-slate-900 text-sm">{label}</p>
          {sub && <p className="text-xs text-slate-500">{sub}</p>}

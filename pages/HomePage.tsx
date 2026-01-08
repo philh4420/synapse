@@ -49,7 +49,8 @@ export const HomePage: React.FC = () => {
       
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      <div className="pt-14 flex justify-between min-h-screen">
+      {/* Increased top padding (pt-24) to account for the floating header island */}
+      <div className="pt-24 flex justify-between min-h-screen">
         
         {/* Left Sidebar */}
         <div className="hidden lg:block w-[280px] xl:w-[360px] flex-shrink-0 z-10">

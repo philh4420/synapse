@@ -146,7 +146,7 @@ export const RightPanel: React.FC = () => {
   };
 
   return (
-    <div className="hidden lg:flex flex-col w-[280px] xl:w-[360px] h-[calc(100vh-56px)] fixed right-0 top-14 pt-4 pr-2 pb-4 hover:overflow-y-auto hide-scrollbar">
+    <div className="hidden lg:flex flex-col w-[280px] xl:w-[360px] h-[calc(100vh-90px)] fixed right-0 top-[5.5rem] pt-4 pr-2 pb-4 hover:overflow-y-auto hide-scrollbar">
       
       {/* --- Sponsored Section --- */}
       <div className="mb-4">
