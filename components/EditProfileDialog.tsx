@@ -31,6 +31,8 @@ export const EditProfileDialog: React.FC<EditProfileDialogProps> = ({ open, onOp
   const [work, setWork] = useState(userProfile?.work || '');
   const [education, setEducation] = useState(userProfile?.education || '');
   const [website, setWebsite] = useState(userProfile?.website || '');
+  const [relationshipStatus, setRelationshipStatus] = useState(userProfile?.relationshipStatus || 'Single');
+  const [birthDate, setBirthDate] = useState(userProfile?.birthDate || '');
   
   // Image State
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -78,6 +80,8 @@ export const EditProfileDialog: React.FC<EditProfileDialogProps> = ({ open, onOp
         work,
         education,
         website,
+        relationshipStatus: relationshipStatus as any,
+        birthDate,
         photoURL: newPhotoURL,
         coverURL: newCoverURL
       };
@@ -167,25 +171,48 @@ export const EditProfileDialog: React.FC<EditProfileDialogProps> = ({ open, onOp
               />
             </div>
 
-            <Input 
-              label="Workplace" 
-              placeholder="e.g. Software Engineer at Synapse"
-              value={work} 
-              onChange={(e) => setWork(e.target.value)} 
-            />
-            
-            <Input 
-              label="Education" 
-              placeholder="e.g. Harvard University"
-              value={education} 
-              onChange={(e) => setEducation(e.target.value)} 
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+               <Input 
+                label="Workplace" 
+                placeholder="e.g. Software Engineer"
+                value={work} 
+                onChange={(e) => setWork(e.target.value)} 
+              />
+              
+              <Input 
+                label="Education" 
+                placeholder="e.g. Harvard University"
+                value={education} 
+                onChange={(e) => setEducation(e.target.value)} 
+              />
+            </div>
 
             <Input 
               label="Current City" 
               placeholder="e.g. San Francisco, CA"
               value={location} 
               onChange={(e) => setLocation(e.target.value)} 
+            />
+            
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Relationship Status</label>
+              <select 
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={relationshipStatus}
+                onChange={(e) => setRelationshipStatus(e.target.value as "Single" | "In a relationship" | "Married" | "Complicated")}
+              >
+                <option value="Single">Single</option>
+                <option value="In a relationship">In a relationship</option>
+                <option value="Married">Married</option>
+                <option value="Complicated">It's complicated</option>
+              </select>
+            </div>
+
+            <Input 
+              label="Birth Date"
+              type="date"
+              value={birthDate}
+              onChange={(e) => setBirthDate(e.target.value)}
             />
 
             <Input 
