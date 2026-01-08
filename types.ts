@@ -99,3 +99,18 @@ export interface SponsoredAd {
   image: string;
   link: string;
 }
+
+export interface Notification {
+  id: string;
+  recipientUid: string;
+  sender: {
+    uid: string;
+    displayName: string;
+    photoURL: string;
+  };
+  type: 'like' | 'comment' | 'follow';
+  postId?: string; // ID of the post interacted with
+  previewText?: string; // Snippet of comment or post
+  read: boolean;
+  timestamp: any;
+}

@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -34,7 +35,8 @@ service cloud.firestore {
       // 2. OR User is just updating likes/likedByUsers (liking/unliking) or comments count
       allow update: if request.auth != null && (
         resource.data.author.uid == request.auth.uid || 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedByUsers', 'comments'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedByUsers', 'comments']) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions'])
       );
 
       // Subcollection for comments
@@ -46,6 +48,20 @@ service cloud.firestore {
     }
     
     match /posts {
+      allow list: if request.auth != null;
+    }
+
+    // Rules for notifications
+    match /notifications/{notificationId} {
+       // Users can read their own notifications
+       allow read: if request.auth != null && resource.data.recipientUid == request.auth.uid;
+       // Any authenticated user can create a notification (e.g. liking a post triggers this)
+       allow create: if request.auth != null;
+       // Users can update their own notifications (e.g. marking as read)
+       allow update: if request.auth != null && resource.data.recipientUid == request.auth.uid;
+    }
+    
+    match /notifications {
       allow list: if request.auth != null;
     }
 

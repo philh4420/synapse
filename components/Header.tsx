@@ -1,14 +1,16 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Home, Compass, Users, LayoutGrid, MessageCircle, Bell, ChevronDown, 
   Activity, Shield, Store, MonitorPlay, X, LogOut, Settings, HelpCircle, 
-  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu
+  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, CheckCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, onSnapshot, orderBy, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
-import { UserProfile } from '../types';
+import { UserProfile, Notification } from '../types';
 import { cn } from '../lib/utils';
+import { formatDistanceToNow } from 'date-fns';
 
 // Shadcn Components
 import { Button } from './ui/Button';
@@ -17,8 +19,6 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
   DropdownMenuTrigger,
   DropdownMenuGroup,
   DropdownMenuSub,
@@ -59,6 +59,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const [isSearching, setIsSearching] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // Notifications State
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const navItems = [
     { id: 'feed', icon: Home, label: 'Home' },
     { id: 'explore', icon: Compass, label: 'Explore' },
@@ -81,6 +85,46 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Real-time Notifications Listener
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'notifications'),
+      where('recipientUid', '==', user.uid),
+      orderBy('timestamp', 'desc'),
+      limit(20)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notifs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate() || new Date()
+      })) as Notification[];
+      
+      setNotifications(notifs);
+      setUnreadCount(notifs.filter(n => !n.read).length);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Mark notification as read
+  const markAsRead = async (notif: Notification) => {
+    if (notif.read) return;
+    try {
+      await updateDoc(doc(db, 'notifications', notif.id), { read: true });
+    } catch (e) {
+      console.error("Error marking read", e);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    const unread = notifications.filter(n => !n.read);
+    unread.forEach(n => markAsRead(n));
+  };
 
   // Search Users
   useEffect(() => {
@@ -110,6 +154,57 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     const timeoutId = setTimeout(searchUsers, 300);
     return () => clearTimeout(timeoutId);
   }, [searchQuery]);
+
+  const NotificationItem = ({ notif }: { notif: Notification }) => {
+    let message = '';
+    let icon = null;
+
+    switch (notif.type) {
+      case 'like':
+        message = 'liked your post';
+        icon = <div className="absolute -bottom-1 -right-1 bg-synapse-600 rounded-full p-1 border-2 border-white"><Activity className="w-3 h-3 text-white fill-current" /></div>;
+        break;
+      case 'comment':
+        message = 'commented on your post';
+        icon = <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1 border-2 border-white"><MessageCircle className="w-3 h-3 text-white fill-current" /></div>;
+        break;
+      case 'follow':
+        message = 'started following you';
+        break;
+      default:
+        message = 'interacted with your content';
+    }
+
+    return (
+      <div 
+        onClick={() => { markAsRead(notif); setActiveTab('feed'); }}
+        className={cn(
+          "flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-colors relative",
+          notif.read ? "hover:bg-slate-50" : "bg-blue-50/50 hover:bg-blue-50"
+        )}
+      >
+        <div className="relative flex-shrink-0">
+          <Avatar className="w-14 h-14 border border-slate-200">
+            <AvatarImage src={notif.sender.photoURL} />
+            <AvatarFallback>{notif.sender.displayName[0]}</AvatarFallback>
+          </Avatar>
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+           <p className="text-[15px] leading-snug text-slate-900">
+             <span className="font-bold">{notif.sender.displayName}</span> {message}
+             {notif.previewText && <span className="text-slate-500 font-normal"> "{notif.previewText}"</span>}
+           </p>
+           <p className={cn("text-xs mt-1 font-medium", notif.read ? "text-slate-500" : "text-synapse-600")}>
+             {formatDistanceToNow(notif.timestamp, { addSuffix: true })}
+           </p>
+        </div>
+        {!notif.read && (
+          <div className="w-3 h-3 bg-synapse-600 rounded-full absolute right-2 top-1/2 -translate-y-1/2" />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="fixed top-0 left-0 right-0 h-14 bg-white shadow-sm z-50 flex items-center justify-between px-4 select-none">
@@ -344,24 +439,54 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           {/* Notifications Popover */}
           <Popover>
             <PopoverTrigger asChild>
-               <Button variant="ghost" size="icon" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-900 h-10 w-10">
+               <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={cn(
+                    "rounded-full hover:bg-slate-200 text-slate-900 h-10 w-10 relative",
+                    unreadCount > 0 ? "bg-synapse-100 text-synapse-700" : "bg-slate-100"
+                  )}
+               >
                   <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                     <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                     </div>
+                  )}
                </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[360px] p-0 h-[400px] flex flex-col" align="end">
+            <PopoverContent className="w-[360px] p-0 h-[80vh] max-h-[500px] flex flex-col" align="end">
                <div className="p-4 pb-2 flex justify-between items-center">
                  <h3 className="text-2xl font-bold">Notifications</h3>
                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"><MoreHorizontal className="w-5 h-5 text-slate-600" /></Button>
                </div>
-               <div className="px-4 py-2">
+               <div className="px-4 py-2 flex justify-between items-center">
                   <div className="flex gap-2">
                      <button className="bg-synapse-100 text-synapse-700 px-3 py-1.5 rounded-full text-sm font-semibold">All</button>
                      <button className="hover:bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full text-sm font-semibold transition-colors">Unread</button>
                   </div>
+                  {unreadCount > 0 && (
+                     <button 
+                        onClick={markAllAsRead}
+                        className="text-synapse-600 text-sm hover:underline"
+                     >
+                        Mark all as read
+                     </button>
+                  )}
                </div>
-               <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-                   <Bell className="w-16 h-16 text-slate-200 mb-2" />
-                   <p className="font-medium">No notifications</p>
+               <div className="flex-1 overflow-y-auto px-2">
+                  {notifications.length > 0 ? (
+                     <div className="space-y-1 pb-4">
+                        {notifications.map(notif => (
+                           <NotificationItem key={notif.id} notif={notif} />
+                        ))}
+                     </div>
+                  ) : (
+                     <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                        <Bell className="w-16 h-16 text-slate-200 mb-2" />
+                        <p className="font-medium">No notifications</p>
+                     </div>
+                  )}
                </div>
             </PopoverContent>
           </Popover>

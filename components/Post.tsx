@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ThumbsUp, MessageCircle, Share2, MoreHorizontal, Globe, 
@@ -113,6 +114,28 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
   // -- Handlers --
 
+  const createNotification = async (type: 'like' | 'comment', previewText?: string) => {
+    if (!user || user.uid === post.author.uid) return; // Don't notify self
+
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        recipientUid: post.author.uid,
+        sender: {
+          uid: user.uid,
+          displayName: userProfile?.displayName || user.displayName || 'Someone',
+          photoURL: userProfile?.photoURL || user.photoURL || ''
+        },
+        type,
+        postId: post.id,
+        previewText: previewText || '',
+        read: false,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Failed to create notification", e);
+    }
+  };
+
   const handleReaction = async (type: ReactionType) => {
     if (!user) return;
     
@@ -124,18 +147,24 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     const postRef = doc(db, 'posts', post.id);
     try {
       if (oldReaction && !newReaction) {
+        // Removing reaction
         await updateDoc(postRef, { 
           likes: increment(-1), 
           likedByUsers: arrayRemove(user.uid),
           [`reactions.${user.uid}`]: deleteField() 
         } as any);
       } else if (!oldReaction && newReaction) {
+        // Adding new reaction
         await updateDoc(postRef, { 
           likes: increment(1), 
           likedByUsers: arrayUnion(user.uid),
           [`reactions.${user.uid}`]: newReaction 
         });
+        
+        // Create Notification
+        await createNotification('like', post.content.substring(0, 30));
       } else if (oldReaction && newReaction && oldReaction !== newReaction) {
+        // Changing reaction
         await updateDoc(postRef, { 
           [`reactions.${user.uid}`]: newReaction 
         });
@@ -188,6 +217,10 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         timestamp: serverTimestamp()
       });
       await updateDoc(doc(db, 'posts', post.id), { comments: increment(1) });
+      
+      // Notify
+      await createNotification('comment', 'posted a GIF');
+      
       toast("GIF posted", "success");
     } catch (error) {
        toast("Failed to post GIF", "error");
@@ -218,6 +251,9 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
       await updateDoc(doc(db, 'posts', post.id), { comments: increment(1) });
       
+      // Notify
+      await createNotification('comment', commentText.substring(0, 30));
+
       setCommentText('');
       setCommentImage(null);
       setCommentImagePreview(null);
