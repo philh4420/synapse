@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Image, Video, Smile, X, Loader2, Globe, MapPin, UserPlus, ChevronDown, 
-  Type, Search, ArrowLeft, MoreHorizontal, Gift
+  Type, Search, ArrowLeft, MoreHorizontal, Gift, Navigation
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
@@ -68,13 +68,74 @@ export const CreatePost: React.FC = () => {
   // Search States
   const [gifSearch, setGifSearch] = useState('');
   const [gifs, setGifs] = useState<any[]>([]);
+  
+  // Location Search State (REAL)
   const [locationSearch, setLocationSearch] = useState('');
+  const [locationResults, setLocationResults] = useState<any[]>([]);
+  const [isLocating, setIsLocating] = useState(false);
+
   const [userSearch, setUserSearch] = useState('');
   const [userResults, setUserResults] = useState<UserProfile[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Handlers ---
+  // --- Real Location Handlers ---
+
+  useEffect(() => {
+    const searchLocation = async () => {
+      if (locationSearch.trim().length < 2) {
+        setLocationResults([]);
+        return;
+      }
+      try {
+        // Using OpenStreetMap Nominatim API (Free, Real Data)
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationSearch)}&limit=8&addressdetails=1`);
+        if (res.ok) {
+          const data = await res.json();
+          setLocationResults(data);
+        }
+      } catch (e) {
+        console.error("Location search failed", e);
+      }
+    };
+
+    const timeoutId = setTimeout(searchLocation, 500);
+    return () => clearTimeout(timeoutId);
+  }, [locationSearch]);
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      try {
+        const { latitude, longitude } = position.coords;
+        // Reverse Geocoding
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`);
+        if (res.ok) {
+          const data = await res.json();
+          const addr = data.address;
+          // Construct a friendly name (City, State)
+          const name = addr.city || addr.town || addr.village || addr.suburb || data.name.split(',')[0];
+          const region = addr.state || addr.country;
+          setLocation(`${name}, ${region}`);
+          setSubModal('none');
+        }
+      } catch (error) {
+        console.error("Error getting location details:", error);
+      } finally {
+        setIsLocating(false);
+      }
+    }, (error) => {
+      console.error("Geo error:", error);
+      setIsLocating(false);
+      alert("Could not retrieve location.");
+    });
+  };
+
+  // --- Other Handlers ---
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -349,7 +410,7 @@ export const CreatePost: React.FC = () => {
               </div>
             )}
 
-            {/* Location (Mock) */}
+            {/* Location (REAL) */}
             {subModal === 'location' && (
               <div className="flex-1 p-4 flex flex-col">
                 <div className="relative mb-4">
@@ -359,19 +420,52 @@ export const CreatePost: React.FC = () => {
                       onChange={(e) => setLocationSearch(e.target.value)}
                       placeholder="Where are you?" 
                       className="w-full bg-slate-100 rounded-full pl-9 pr-4 py-2 focus:outline-none focus:ring-1 focus:ring-synapse-500"
+                      autoFocus
                     />
                 </div>
+                
                 <div className="space-y-1 overflow-y-auto">
-                   {['San Francisco', 'New York', 'London', 'Tokyo', 'Sydney'].filter(l => l.toLowerCase().includes(locationSearch.toLowerCase())).map(place => (
+                   {/* Current Location Option */}
+                   {!locationSearch && (
                       <button 
-                        key={place}
-                        onClick={() => { setLocation(place); setSubModal('none'); }}
-                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-100 rounded-lg text-left"
+                        onClick={getCurrentLocation}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-100 rounded-lg text-left text-synapse-600"
                       >
-                         <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center"><MapPin className="w-5 h-5 text-slate-600" /></div>
-                         <span className="font-medium">{place}</span>
+                         <div className="w-10 h-10 bg-synapse-50 rounded-full flex items-center justify-center">
+                            {isLocating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Navigation className="w-5 h-5 fill-current" />}
+                         </div>
+                         <span className="font-medium">Use current location</span>
                       </button>
-                   ))}
+                   )}
+
+                   {/* API Results */}
+                   {locationResults.map((place: any, i) => {
+                      // Nominatim 'display_name' is very long. Let's try to extract parts.
+                      // Format often: "Name, Suburb, City, State, Postcode, Country"
+                      const parts = place.display_name.split(', ');
+                      const mainText = parts[0];
+                      const subText = parts.slice(1, 3).join(', ');
+                      
+                      return (
+                        <button 
+                          key={i}
+                          onClick={() => { setLocation(mainText); setSubModal('none'); }}
+                          className="w-full flex items-center gap-3 p-3 hover:bg-slate-100 rounded-lg text-left group"
+                        >
+                          <div className="w-10 h-10 bg-slate-200 group-hover:bg-slate-300 rounded-full flex items-center justify-center flex-shrink-0 transition-colors">
+                              <MapPin className="w-5 h-5 text-slate-600" />
+                          </div>
+                          <div className="min-w-0">
+                              <div className="font-medium text-slate-900 truncate">{mainText}</div>
+                              <div className="text-xs text-slate-500 truncate">{subText}</div>
+                          </div>
+                        </button>
+                      );
+                   })}
+                   
+                   {locationSearch && locationResults.length === 0 && (
+                      <div className="text-center text-slate-500 py-4">No locations found</div>
+                   )}
                 </div>
               </div>
             )}
