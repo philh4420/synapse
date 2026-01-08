@@ -53,17 +53,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
            </li>
       </ul>
       
+      {/* 
+        This section used to contain dummy shortcuts. 
+        It is now empty until real group functionality is implemented 
+        to ensure no fake data is displayed.
+      */}
       <div className="pt-4 border-t border-slate-300">
          <h3 className="text-slate-500 font-semibold text-[17px] px-2 mb-2">Your Shortcuts</h3>
-         <div className="px-2 text-sm text-slate-500 space-y-4">
-            <div className="flex items-center gap-3 cursor-pointer hover:bg-black/5 p-2 rounded-lg -mx-2 transition-colors">
-               <img src="https://picsum.photos/seed/devs/50" className="w-8 h-8 rounded-lg" alt="Group" />
-               <span className="font-medium text-slate-900">Synapse Developers</span>
-            </div>
-            <div className="flex items-center gap-3 cursor-pointer hover:bg-black/5 p-2 rounded-lg -mx-2 transition-colors">
-               <img src="https://picsum.photos/seed/design/50" className="w-8 h-8 rounded-lg" alt="Group" />
-               <span className="font-medium text-slate-900">UI/UX Design Hub</span>
-            </div>
+         <div className="px-2 text-sm text-slate-500 italic">
+            <p>Join groups to see them here.</p>
          </div>
       </div>
       
