@@ -4,6 +4,7 @@ import { Feed } from '../components/Feed';
 import { RightPanel } from '../components/RightPanel';
 import { AdminPanel } from '../components/AdminPanel';
 import { Profile } from '../components/Profile';
+import { Header } from '../components/Header';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +12,19 @@ export const HomePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('feed');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { userProfile } = useAuth();
+
+  const getHeaderProps = () => {
+    switch (activeTab) {
+      case 'feed': return { title: 'Home', showTabs: true };
+      case 'explore': return { title: 'Explore', showTabs: false };
+      case 'notifications': return { title: 'Notifications', showTabs: false };
+      case 'messages': return { title: 'Messages', showTabs: false };
+      case 'bookmarks': return { title: 'Bookmarks', showTabs: false };
+      case 'profile': return { title: userProfile?.displayName || 'Profile', showTabs: false };
+      case 'admin': return { title: 'Admin Panel', showTabs: false };
+      default: return { title: 'Synapse', showTabs: false };
+    }
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -31,6 +45,8 @@ export const HomePage: React.FC = () => {
         );
     }
   };
+
+  const headerProps = getHeaderProps();
 
   return (
     <div className="min-h-screen bg-slate-50 flex justify-center">
@@ -71,8 +87,11 @@ export const HomePage: React.FC = () => {
 
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
       
-      <main className="flex-1 w-full max-w-2xl mt-14 lg:mt-0">
-        {renderContent()}
+      <main className="flex-1 w-full max-w-2xl mt-14 lg:mt-0 min-h-screen border-x border-slate-200/60 bg-white/50">
+        <Header title={headerProps.title} showTabs={headerProps.showTabs} />
+        <div className="lg:pt-4">
+           {renderContent()}
+        </div>
       </main>
 
       <RightPanel />

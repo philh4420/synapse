@@ -3,7 +3,7 @@ import { Image, Video, Link2, Smile, Send, X, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/Button';
 import { uploadToCloudinary } from '../utils/upload';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import firebase from 'firebase/app';
 import { db } from '../firebaseConfig';
 
 interface CreatePostProps {
@@ -45,7 +45,7 @@ export const CreatePost: React.FC<CreatePostProps> = () => {
       }
       
       // Save post to Firestore
-      await addDoc(collection(db, 'posts'), {
+      await db.collection('posts').add({
         author: {
           name: user.displayName || 'Anonymous',
           handle: user.email ? `@${user.email.split('@')[0]}` : '@user',
@@ -54,7 +54,7 @@ export const CreatePost: React.FC<CreatePostProps> = () => {
         },
         content: content,
         image: imageUrl || null,
-        timestamp: serverTimestamp(),
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         likes: 0,
         comments: 0,
         shares: 0,

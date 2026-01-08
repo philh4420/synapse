@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import firebase from 'firebase/app';
 import { auth, db } from '../firebaseConfig';
 import { UserProfile } from '../types';
 
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: firebase.User | null;
   userProfile: UserProfile | null;
   loading: boolean;
   logout: () => Promise<void>;
@@ -23,15 +22,14 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<firebase.User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = async (uid: string) => {
     try {
-      const docRef = doc(db, 'users', uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
+      const docSnap = await db.collection('users').doc(uid).get();
+      if (docSnap.exists) {
         setUserProfile(docSnap.data() as UserProfile);
       }
     } catch (error) {
@@ -40,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         await fetchUserProfile(firebaseUser.uid);
@@ -54,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = async () => {
-    await signOut(auth);
+    await auth.signOut();
     setUserProfile(null);
   };
 

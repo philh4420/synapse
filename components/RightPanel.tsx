@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Search, MoreHorizontal, UserPlus } from 'lucide-react';
-import { collection, query, limit, getDocs, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { UserProfile, Trend } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -15,25 +14,19 @@ export const RightPanel: React.FC = () => {
     const fetchData = async () => {
       try {
         // Fetch Trends
-        // Note: Assuming a 'trends' collection exists. If not, this handles gracefully.
-        const trendsRef = collection(db, 'trending');
-        const trendsQuery = query(trendsRef, orderBy('count', 'desc'), limit(4));
-        const trendsSnap = await getDocs(trendsQuery);
+        const trendsSnap = await db.collection('trending')
+          .orderBy('count', 'desc')
+          .limit(4)
+          .get();
         
         if (!trendsSnap.empty) {
           setTrends(trendsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Trend)));
         } else {
-          // Fallback if no trends collection (optional, or just show empty)
           setTrends([]); 
         }
 
         // Fetch Suggested Users
-        // Fetching 5 users that are not the current user
-        const usersRef = collection(db, 'users');
-        // Firestore limitation: cannot effectively shuffle or filter 'not-equal' efficiently without composite indexes/client filtering.
-        // For simplicity in this scale, fetch latest 10 and filter client side.
-        const usersQuery = query(usersRef, limit(10)); 
-        const usersSnap = await getDocs(usersQuery);
+        const usersSnap = await db.collection('users').limit(10).get();
         
         const usersData = usersSnap.docs
           .map(doc => doc.data() as UserProfile)

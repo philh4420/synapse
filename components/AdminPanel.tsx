@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Lock, Unlock, Save, AlertTriangle } from 'lucide-react';
 import { Button } from './ui/Button';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,13 +14,12 @@ export const AdminPanel: React.FC = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const settingsRef = doc(db, 'settings', 'site');
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists()) {
-          setSignupEnabled(settingsSnap.data().signupEnabled);
+        const settingsSnap = await db.collection('settings').doc('site').get();
+        if (settingsSnap.exists) {
+          setSignupEnabled(settingsSnap.data()?.signupEnabled);
         } else {
           // If document doesn't exist, assume enabled and create it
-          await setDoc(settingsRef, { signupEnabled: true });
+          await db.collection('settings').doc('site').set({ signupEnabled: true });
         }
       } catch (err) {
         console.error("Error fetching settings:", err);
@@ -37,7 +35,7 @@ export const AdminPanel: React.FC = () => {
     setSaving(true);
     setMessage({ type: '', text: '' });
     try {
-      await setDoc(doc(db, 'settings', 'site'), {
+      await db.collection('settings').doc('site').set({
         signupEnabled: signupEnabled
       }, { merge: true });
       setMessage({ type: 'success', text: 'Settings updated successfully.' });

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Post as PostComponent } from './Post';
 import { Post as PostType } from '../types';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { MapPin, Link as LinkIcon, Calendar, Edit3, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -16,25 +15,22 @@ export const Profile: React.FC = () => {
     if (!user) return;
 
     // Query posts where author.uid matches current user
-    const q = query(
-      collection(db, 'posts'),
-      where('author.uid', '==', user.uid),
-      orderBy('timestamp', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          timestamp: data.timestamp?.toDate() || new Date(),
-        };
-      }) as PostType[];
-      
-      setPosts(postsData);
-      setLoading(false);
-    });
+    const unsubscribe = db.collection('posts')
+      .where('author.uid', '==', user.uid)
+      .orderBy('timestamp', 'desc')
+      .onSnapshot((snapshot) => {
+        const postsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            timestamp: data.timestamp?.toDate() || new Date(),
+          };
+        }) as PostType[];
+        
+        setPosts(postsData);
+        setLoading(false);
+      });
 
     return () => unsubscribe();
   }, [user]);
