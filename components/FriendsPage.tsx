@@ -19,19 +19,16 @@ export const FriendsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'requests' | 'suggestions' | 'all'>('requests');
 
+  // 1. Listen for Incoming Requests
   useEffect(() => {
     if (!user) return;
-
-    // 1. Listen for Incoming Requests
     const qRequests = query(
       collection(db, 'friend_requests'),
       where('receiverId', '==', user.uid),
       where('status', '==', 'pending')
     );
-
     const unsubscribe = onSnapshot(qRequests, async (snapshot) => {
       const reqs: FriendRequest[] = [];
-      
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
         const senderRef = doc(db, 'users', data.senderId);
@@ -49,11 +46,15 @@ export const FriendsPage: React.FC = () => {
       }
       setRequests(reqs);
     });
+    return () => unsubscribe();
+  }, [user]);
 
-    // 2. Fetch All Friends
+  // 2. Fetch All Friends (Reactive to userProfile changes)
+  useEffect(() => {
     const fetchFriends = async () => {
         if (!userProfile?.friends || userProfile.friends.length === 0) {
             setFriends([]);
+            setLoading(false);
             return;
         }
         
@@ -61,8 +62,10 @@ export const FriendsPage: React.FC = () => {
             const friendsList = [...userProfile.friends];
             const fetchedFriends: UserProfile[] = [];
             
-            // Limit to first 20 for initial load
+            // Batch fetch friends (Firestore limits 'in' query to 10-30 items depending on sdk version, usually 10 is safe for 'in')
+            // For a production app, we would paginate this properly.
             const chunk = friendsList.slice(0, 20);
+            
             if (chunk.length > 0) {
                 const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
                 const snap = await getDocs(q);
@@ -72,38 +75,32 @@ export const FriendsPage: React.FC = () => {
             setFriends(fetchedFriends);
         } catch (e) {
             console.error("Error fetching friends list", e);
+        } finally {
+            setLoading(false);
         }
     };
 
     fetchFriends();
-    setLoading(false);
-
-    return () => unsubscribe();
   }, [user, userProfile?.friends]);
 
-  // 3. Fetch Suggestions (Users not in friends list and no pending requests)
+  // 3. Fetch Suggestions
   useEffect(() => {
     const fetchSuggestions = async () => {
       if (!user || view !== 'suggestions') return;
       setLoading(true);
-
       try {
-        // Build exclusion set
         const excludeIds = new Set<string>();
         excludeIds.add(user.uid);
         userProfile?.friends?.forEach(id => excludeIds.add(id));
 
-        // Get Outgoing Requests to exclude
         const qSent = query(collection(db, 'friend_requests'), where('senderId', '==', user.uid));
         const sentSnap = await getDocs(qSent);
         sentSnap.forEach(doc => excludeIds.add(doc.data().receiverId));
 
-        // Get Incoming Requests to exclude
         const qReceived = query(collection(db, 'friend_requests'), where('receiverId', '==', user.uid));
         const recSnap = await getDocs(qReceived);
         recSnap.forEach(doc => excludeIds.add(doc.data().senderId));
 
-        // Fetch Users (Limit 50 to simulate "Suggestions")
         const qUsers = query(collection(db, 'users'), limit(50));
         const userSnap = await getDocs(qUsers);
         
@@ -113,7 +110,6 @@ export const FriendsPage: React.FC = () => {
                 newSuggestions.push(doc.data() as UserProfile);
             }
         });
-        
         setSuggestions(newSuggestions);
       } catch (error) {
         console.error("Error fetching suggestions", error);
@@ -121,16 +117,15 @@ export const FriendsPage: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchSuggestions();
   }, [user, userProfile, view]);
 
   return (
-    <div className="w-full max-w-[1600px] mx-auto p-2 md:p-6">
-      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[360px_1fr] gap-8 items-start">
+    <div className="w-full h-full p-2 md:p-6">
+      <div className="flex flex-col md:flex-row gap-6 h-full items-start">
          
-         {/* Sidebar Navigation */}
-         <div className="md:sticky md:top-20">
+         {/* Internal Sidebar */}
+         <div className="w-full md:w-[280px] md:flex-shrink-0 md:sticky md:top-20">
             <div className="flex items-center justify-between mb-4 px-2">
                 <h1 className="text-2xl font-bold text-slate-900">Friends</h1>
                 <Button variant="ghost" size="icon" className="rounded-full bg-slate-100 hover:bg-slate-200">
@@ -179,19 +174,17 @@ export const FriendsPage: React.FC = () => {
             <Separator className="my-4" />
          </div>
 
-         {/* Main Content Area */}
-         <div className="min-h-[500px] w-full min-w-0">
+         {/* Content Area - Fluid Grid */}
+         <div className="flex-1 w-full min-w-0">
             {view === 'requests' && (
                <div className="space-y-6">
                   <div className="flex items-center justify-between">
                      <h2 className="text-xl font-bold text-slate-900">Friend Requests</h2>
-                     {requests.length > 0 && (
-                        <Button variant="link" className="text-synapse-600">See all</Button>
-                     )}
+                     {requests.length > 0 && <Button variant="link" className="text-synapse-600">See all</Button>}
                   </div>
 
                   {requests.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                          {requests.map(req => (
                              <Card key={req.id} className="overflow-hidden border-slate-200 shadow-sm hover:shadow-md transition-shadow">
                                 <div className="aspect-square bg-slate-100 relative">
@@ -219,7 +212,6 @@ export const FriendsPage: React.FC = () => {
                             <UserPlus className="w-10 h-10 text-slate-300" />
                          </div>
                          <h3 className="text-lg font-bold text-slate-900">No new requests</h3>
-                         <p className="text-slate-500 mt-1">Check back later for more.</p>
                       </div>
                   )}
                </div>
@@ -227,18 +219,13 @@ export const FriendsPage: React.FC = () => {
 
             {view === 'suggestions' && (
                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                     <h2 className="text-xl font-bold text-slate-900">People You May Know</h2>
-                  </div>
-                  
+                  <h2 className="text-xl font-bold text-slate-900">People You May Know</h2>
                   {loading ? (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {[1,2,3,4,5].map(i => (
-                           <div key={i} className="aspect-[3/4] bg-slate-100 rounded-xl animate-pulse" />
-                        ))}
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-slate-100 rounded-xl animate-pulse" />)}
                      </div>
                   ) : suggestions.length > 0 ? (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                         {suggestions.map(s => (
                            <Card key={s.uid} className="overflow-hidden border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col">
                               <div className="aspect-square bg-slate-100 relative shrink-0">
@@ -263,11 +250,8 @@ export const FriendsPage: React.FC = () => {
                      </div>
                   ) : (
                      <div className="text-center py-20 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Sparkles className="w-8 h-8 text-slate-300" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-slate-900">No suggestions available</h3>
-                        <p className="text-slate-500 mt-1">Try searching for people you know.</p>
+                        <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-slate-900">No suggestions</h3>
                      </div>
                   )}
                </div>
@@ -277,17 +261,15 @@ export const FriendsPage: React.FC = () => {
                <div className="space-y-6">
                   <div className="flex items-center justify-between">
                      <h2 className="text-xl font-bold text-slate-900">All Friends</h2>
-                     <div className="relative">
-                        <input 
-                           type="text" 
-                           placeholder="Search Friends" 
-                           className="bg-slate-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-synapse-500 w-48 transition-all focus:w-64"
-                        />
-                     </div>
+                     <input 
+                       type="text" 
+                       placeholder="Search Friends" 
+                       className="bg-slate-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-synapse-500 w-48 focus:w-64 transition-all"
+                     />
                   </div>
                   
                   {friends.length > 0 ? (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
                         {friends.map(friend => (
                            <Card key={friend.uid} className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors border-slate-200 shadow-sm">
                               <Avatar className="w-20 h-20 rounded-xl border border-slate-100">
@@ -298,19 +280,14 @@ export const FriendsPage: React.FC = () => {
                                  <h3 className="font-semibold text-slate-900 text-base truncate">{friend.displayName}</h3>
                                  <p className="text-xs text-slate-500">Synapse User</p>
                               </div>
-                              <div>
-                                 <FriendButton targetUid={friend.uid} size="icon" className="rounded-full" />
-                              </div>
+                              <FriendButton targetUid={friend.uid} size="icon" className="rounded-full" />
                            </Card>
                         ))}
                      </div>
                   ) : (
                      <div className="text-center py-20 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Users className="w-8 h-8 text-slate-300" />
-                        </div>
+                        <Users className="w-10 h-10 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-lg font-semibold text-slate-900">No friends yet</h3>
-                        <p className="text-slate-500 mt-1">When you add friends, they'll appear here.</p>
                         <Button variant="link" className="mt-2 text-synapse-600" onClick={() => setView('suggestions')}>Find Friends</Button>
                      </div>
                   )}

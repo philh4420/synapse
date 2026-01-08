@@ -41,27 +41,23 @@ export const HomePage: React.FC = () => {
     }
   };
 
-  // Profile and Admin pages benefit from wider layout
-  // Feed is restricted to mimic FB Feed width
-  // Friends page handles its own responsiveness internally
+  // Wide layout for everything except Feed (which mimics FB's narrow feed)
   const isWidePage = activeTab === 'friends' || activeTab === 'admin' || activeTab === 'profile';
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5]"> {/* Facebook-like background color */}
+    <div className="min-h-screen bg-[#F0F2F5]"> 
       
-      {/* Fixed Top Header */}
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {/* Main Content Container */}
       <div className="pt-14 flex justify-between min-h-screen">
         
-        {/* Left Sidebar (Shortcuts) - Fixed */}
+        {/* Left Sidebar */}
         <div className="hidden lg:block w-[280px] xl:w-[360px] flex-shrink-0 z-10">
            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         </div>
 
-        {/* Center Content (Feed/Profile) - Scrollable */}
-        {/* Adjusted width logic: Fixed width for Feed, Fluid for others */}
+        {/* Center Content */}
+        {/* If isWidePage, use max-w-[1600px] to fill space between sidebars. */}
         <div className={cn(
           "flex-1 w-full mx-auto py-6 transition-all duration-300 min-w-0",
           isWidePage ? "px-2 md:px-4 max-w-[1600px]" : "max-w-[740px] lg:px-8"
@@ -69,15 +65,14 @@ export const HomePage: React.FC = () => {
            {renderContent()}
         </div>
 
-        {/* Right Sidebar (Contacts/Ads) - Fixed */}
-        {/* Always visible on larger screens (xl+) to mimic Facebook layout without crushing content on smaller laptops */}
+        {/* Right Panel - Always visible on XL screens */}
         <div className="hidden xl:block w-[280px] xl:w-[360px] flex-shrink-0 z-10">
            <RightPanel />
         </div>
 
       </div>
 
-      {/* Mobile Menu Overlay */}
+      {/* Mobile Menu */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-[60] bg-white pt-20 px-6 lg:hidden animate-fade-in">
           <button 

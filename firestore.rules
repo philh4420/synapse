@@ -12,7 +12,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow create: if request.auth != null && request.auth.uid == userId;
       allow read: if request.auth != null;
-      // Allow update if user is editing their own profile OR if only modifying the friends list (for friend requests)
+      
+      // Allow update if:
+      // 1. User is editing their own profile
+      // 2. OR User is modifying the 'friends' list (necessary for accepting friend requests reciprocally)
       allow update: if request.auth != null && (
         request.auth.uid == userId || 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends'])
@@ -25,25 +28,15 @@ service cloud.firestore {
 
     // Rules for the 'posts' collection
     match /posts/{postId} {
-      // Allow authenticated users to read posts
       allow read: if request.auth != null;
-
-      // Allow creation if the author.uid matches the authenticated user's uid
       allow create: if request.auth != null && request.resource.data.author.uid == request.auth.uid;
-      
-      // Allow delete if the user is the author
       allow delete: if request.auth != null && resource.data.author.uid == request.auth.uid;
-
-      // Allow updates if:
-      // 1. User is the author (can edit content, etc.)
-      // 2. OR User is just updating likes/likedByUsers (liking/unliking) or comments count
       allow update: if request.auth != null && (
         resource.data.author.uid == request.auth.uid || 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likedByUsers', 'comments']) ||
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['reactions'])
       );
 
-      // Subcollection for comments
       match /comments/{commentId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null && request.resource.data.author.uid == request.auth.uid;
@@ -57,11 +50,8 @@ service cloud.firestore {
 
     // Rules for notifications
     match /notifications/{notificationId} {
-       // Users can read their own notifications
        allow read: if request.auth != null && resource.data.recipientUid == request.auth.uid;
-       // Any authenticated user can create a notification (e.g. liking a post triggers this)
        allow create: if request.auth != null;
-       // Users can update their own notifications (e.g. marking as read)
        allow update: if request.auth != null && resource.data.recipientUid == request.auth.uid;
     }
     
@@ -71,13 +61,8 @@ service cloud.firestore {
 
     // Rules for friend requests
     match /friend_requests/{requestId} {
-      // Allow read if user is sender or receiver
       allow read: if request.auth != null && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
-      
-      // Allow create if senderId matches auth
       allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
-      
-      // Allow delete if sender or receiver (cancel or accept)
       allow delete: if request.auth != null && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
     }
 
@@ -85,33 +70,24 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
 
-    // Rules for 'stories'
     match /stories/{storyId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
     }
 
-    // Rules for 'ads' (Sponsored section)
     match /ads/{adId} {
       allow read: if request.auth != null;
-      // Only admins can create/update/delete ads
       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Rules for the 'settings' collection
     match /settings/site {
       allow get: if true;
       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-
-    // Rules for 'trending'
+    
     match /trending/{trendId} {
       allow read: if request.auth != null;
-    }
-    
-    match /trending {
-      allow list: if request.auth != null;
     }
   }
 }
