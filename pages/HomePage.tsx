@@ -13,19 +13,6 @@ export const HomePage: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { userProfile } = useAuth();
 
-  const getHeaderProps = () => {
-    switch (activeTab) {
-      case 'feed': return { title: 'Home', showTabs: true };
-      case 'explore': return { title: 'Explore', showTabs: false };
-      case 'notifications': return { title: 'Notifications', showTabs: false };
-      case 'messages': return { title: 'Messages', showTabs: false };
-      case 'bookmarks': return { title: 'Bookmarks', showTabs: false };
-      case 'profile': return { title: userProfile?.displayName || 'Profile', showTabs: false };
-      case 'admin': return { title: 'Admin Panel', showTabs: false };
-      default: return { title: 'Synapse', showTabs: false };
-    }
-  };
-
   const renderContent = () => {
     switch (activeTab) {
       case 'feed':
@@ -36,65 +23,73 @@ export const HomePage: React.FC = () => {
         return <AdminPanel />;
       default:
         return (
-          <div className="flex items-center justify-center h-[80vh] text-slate-400">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-slate-300 mb-2">Coming Soon</h2>
-              <p>This section is under construction for 2026.</p>
-            </div>
+          <div className="flex flex-col items-center justify-center h-[60vh] text-slate-400">
+             <div className="w-24 h-24 bg-slate-200 rounded-full flex items-center justify-center mb-4">
+               <span className="text-4xl">🚧</span>
+             </div>
+             <h2 className="text-2xl font-bold text-slate-700 mb-2">Coming Soon</h2>
+             <p className="text-slate-500 text-center max-w-md">
+               The <span className="font-semibold text-synapse-600 capitalize">{activeTab}</span> section is currently under development for the 2026 release.
+             </p>
           </div>
         );
     }
   };
 
-  const headerProps = getHeaderProps();
-
   return (
-    <div className="min-h-screen bg-slate-50 flex justify-center">
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md z-50 border-b border-slate-200 px-4 py-3 flex justify-between items-center">
-        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-synapse-600 to-synapse-400">
-          Synapse
-        </span>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 text-slate-600">
-          {mobileMenuOpen ? <X /> : <Menu />}
-        </button>
+    <div className="min-h-screen bg-[#F0F2F5]"> {/* Facebook-like background color */}
+      
+      {/* Fixed Top Header */}
+      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      {/* Main Content Container */}
+      <div className="pt-14 flex justify-center min-h-screen">
+        
+        {/* Left Sidebar (Shortcuts) - Fixed */}
+        <div className="hidden lg:block w-[280px] xl:w-[360px] flex-shrink-0">
+           <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        </div>
+
+        {/* Center Content (Feed/Profile) - Scrollable */}
+        <div className="flex-1 max-w-[740px] w-full mx-auto lg:px-8 py-6">
+           {renderContent()}
+        </div>
+
+        {/* Right Sidebar (Contacts/Ads) - Fixed */}
+        <div className="hidden lg:block w-[280px] xl:w-[360px] flex-shrink-0">
+           <RightPanel />
+        </div>
+
       </div>
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-40 bg-white pt-20 px-6 lg:hidden animate-fade-in">
+        <div className="fixed inset-0 z-[60] bg-white pt-20 px-6 lg:hidden animate-fade-in">
+          <button 
+             onClick={() => setMobileMenuOpen(false)}
+             className="absolute top-4 right-4 p-2 bg-slate-100 rounded-full"
+          >
+             <X />
+          </button>
           <div className="space-y-4">
-            {['Feed', 'Explore', 'Notifications', 'Messages', 'Profile'].map((item) => (
+            {['Feed', 'Explore', 'Watch', 'Marketplace', 'Groups', 'Profile'].map((item) => (
               <button 
                 key={item}
-                onClick={() => { setActiveTab(item.toLowerCase()); setMobileMenuOpen(false); }}
+                onClick={() => { setActiveTab(item.toLowerCase() === 'watch' ? 'videos' : item.toLowerCase()); setMobileMenuOpen(false); }}
                 className="block w-full text-left text-lg font-medium text-slate-800 py-3 border-b border-slate-100"
               >
                 {item}
               </button>
             ))}
-            {userProfile?.role === 'admin' && (
-              <button 
+            <button 
                 onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
                 className="block w-full text-left text-lg font-bold text-synapse-600 py-3 border-b border-slate-100"
-              >
-                Admin Panel
-              </button>
-            )}
+            >
+              Admin Panel
+            </button>
           </div>
         </div>
       )}
-
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
-      <main className="flex-1 w-full max-w-2xl mt-14 lg:mt-0 min-h-screen border-x border-slate-200/60 bg-white/50">
-        <Header title={headerProps.title} showTabs={headerProps.showTabs} />
-        <div className="lg:pt-4">
-           {renderContent()}
-        </div>
-      </main>
-
-      <RightPanel />
     </div>
   );
 };

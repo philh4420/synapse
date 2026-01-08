@@ -1,43 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreHorizontal, UserPlus } from 'lucide-react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { Search, MoreHorizontal, Video, Gift } from 'lucide-react';
+import { collection, query, limit, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { UserProfile, Trend } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 export const RightPanel: React.FC = () => {
   const { user } = useAuth();
-  const [trends, setTrends] = useState<Trend[]>([]);
-  const [suggestedUsers, setSuggestedUsers] = useState<UserProfile[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [contacts, setContacts] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch Trends
-        const trendsQuery = query(collection(db, 'trending'), orderBy('count', 'desc'), limit(4));
-        const trendsSnap = await getDocs(trendsQuery);
-        
-        if (!trendsSnap.empty) {
-          setTrends(trendsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Trend)));
-        } else {
-          setTrends([]); 
-        }
-
-        // Fetch Suggested Users
-        const usersQuery = query(collection(db, 'users'), limit(10));
+        // Fetch "Contacts" (Just random users for demo)
+        const usersQuery = query(collection(db, 'users'), limit(15));
         const usersSnap = await getDocs(usersQuery);
         
         const usersData = usersSnap.docs
           .map(doc => doc.data() as UserProfile)
-          .filter(u => u.uid !== user?.uid)
-          .slice(0, 3);
+          .filter(u => u.uid !== user?.uid);
           
-        setSuggestedUsers(usersData);
+        setContacts(usersData);
       } catch (error) {
         console.error("Error fetching right panel data:", error);
       } finally {
-        setLoadingUsers(false);
+        setLoading(false);
       }
     };
 
@@ -45,87 +33,66 @@ export const RightPanel: React.FC = () => {
   }, [user]);
 
   return (
-    <div className="hidden xl:block w-80 h-screen sticky top-0 py-6 pl-2 pr-6 space-y-6">
-      {/* Search */}
-      <div className="relative group">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-synapse-500 transition-colors">
-          <Search size={18} />
-        </div>
-        <input 
-          type="text" 
-          placeholder="Search Synapse..." 
-          className="w-full bg-white border border-slate-100 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-synapse-500/20 focus:border-synapse-500 transition-all shadow-sm"
-        />
+    <div className="hidden lg:flex flex-col w-[280px] xl:w-[360px] h-[calc(100vh-56px)] fixed right-0 top-14 pt-4 pr-2 pb-4 hover:overflow-y-auto hide-scrollbar">
+      {/* Sponsored */}
+      <div className="mb-4 pb-4 border-b border-slate-200">
+        <h3 className="font-semibold text-slate-500 text-[17px] mb-3 px-2">Sponsored</h3>
+        <a href="#" className="flex items-center gap-3 p-2 hover:bg-black/5 rounded-lg transition-colors group">
+          <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&h=200&fit=crop" className="w-28 h-28 rounded-lg object-cover" alt="Ad" />
+          <div className="flex-1">
+             <p className="font-semibold text-slate-900 text-[15px] leading-snug">Nike Air Max 2026</p>
+             <p className="text-xs text-slate-500 mt-1">nike.com</p>
+          </div>
+        </a>
+        <a href="#" className="flex items-center gap-3 p-2 hover:bg-black/5 rounded-lg transition-colors group">
+          <img src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=200&h=200&fit=crop" className="w-28 h-28 rounded-lg object-cover" alt="Ad" />
+          <div className="flex-1">
+             <p className="font-semibold text-slate-900 text-[15px] leading-snug">Get 50% Off Streaming</p>
+             <p className="text-xs text-slate-500 mt-1">streamplus.com</p>
+          </div>
+        </a>
       </div>
 
-      {/* Trending */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-slate-900">Trending Now</h3>
-          <button className="text-slate-400 hover:text-slate-600">
-            <MoreHorizontal size={18} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          {trends.length > 0 ? (
-            trends.map((item) => (
-              <div key={item.id} className="flex justify-between items-center group cursor-pointer">
-                <div>
-                  <p className="font-semibold text-slate-800 text-sm group-hover:text-synapse-600 transition-colors">{item.tag}</p>
-                  <p className="text-xs text-slate-400">{item.posts} Posts</p>
-                </div>
-                <button className="opacity-0 group-hover:opacity-100 text-slate-400 transition-opacity">
-                  <MoreHorizontal size={14} />
-                </button>
-              </div>
-            ))
-          ) : (
-             <p className="text-sm text-slate-400 italic">No trending topics yet.</p>
-          )}
-        </div>
+      {/* Birthdays (Static Demo) */}
+      <div className="mb-4 pb-4 border-b border-slate-200 px-2">
+         <h3 className="font-semibold text-slate-500 text-[17px] mb-3">Birthdays</h3>
+         <div className="flex items-center gap-3 cursor-pointer hover:bg-black/5 p-2 -mx-2 rounded-lg transition-colors">
+            <Gift className="w-8 h-8 text-blue-500" />
+            <p className="text-[15px] text-slate-900">
+               <span className="font-semibold">Alex Smith</span> and <span className="font-semibold">3 others</span> have birthdays today.
+            </p>
+         </div>
       </div>
 
-      {/* Who to follow */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-         <div className="flex justify-between items-center mb-4">
-          <h3 className="font-bold text-slate-900">Who to follow</h3>
-          <button className="text-synapse-600 text-sm font-semibold hover:underline">See all</button>
+      {/* Contacts */}
+      <div className="flex-1">
+        <div className="flex justify-between items-center mb-2 px-2">
+          <h3 className="font-semibold text-slate-500 text-[17px]">Contacts</h3>
+          <div className="flex gap-2 text-slate-500">
+             <Video className="w-4 h-4 cursor-pointer hover:text-slate-700" />
+             <Search className="w-4 h-4 cursor-pointer hover:text-slate-700" />
+             <MoreHorizontal className="w-4 h-4 cursor-pointer hover:text-slate-700" />
+          </div>
         </div>
-        <div className="space-y-4">
-          {loadingUsers ? (
-            <div className="space-y-3">
-               {[1,2,3].map(i => (
-                 <div key={i} className="flex items-center gap-3 animate-pulse">
-                   <div className="w-10 h-10 bg-slate-100 rounded-full"></div>
-                   <div className="flex-1 space-y-2">
-                     <div className="h-3 bg-slate-100 rounded w-2/3"></div>
-                     <div className="h-2 bg-slate-100 rounded w-1/3"></div>
-                   </div>
-                 </div>
-               ))}
-            </div>
+        
+        <div className="space-y-0.5">
+          {loading ? (
+            <div className="px-2 py-2 text-slate-400 text-sm">Loading contacts...</div>
           ) : (
-            suggestedUsers.map((u) => (
-              <div key={u.uid} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+            contacts.map((u) => (
+              <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-black/5 rounded-lg cursor-pointer transition-colors group">
+                <div className="relative">
                   <img 
                     src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} 
                     alt={u.displayName || 'User'} 
-                    className="w-10 h-10 rounded-full object-cover border border-slate-100" 
+                    className="w-9 h-9 rounded-full object-cover border border-slate-200" 
                   />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 truncate max-w-[120px]">{u.displayName}</p>
-                    <p className="text-xs text-slate-400 truncate max-w-[120px]">@{u.email?.split('@')[0]}</p>
-                  </div>
+                  {/* Random online status dot */}
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                 </div>
-                <button className="p-2 text-synapse-600 bg-synapse-50 hover:bg-synapse-100 rounded-full transition-colors">
-                  <UserPlus size={18} />
-                </button>
+                <span className="font-medium text-slate-900 text-[15px]">{u.displayName}</span>
               </div>
             ))
-          )}
-          {!loadingUsers && suggestedUsers.length === 0 && (
-             <p className="text-sm text-slate-400 italic">No suggestions available.</p>
           )}
         </div>
       </div>
