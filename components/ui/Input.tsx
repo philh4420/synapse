@@ -1,40 +1,44 @@
-import React from 'react';
+import React from "react";
+import { cn } from "../../lib/utils";
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   icon?: React.ElementType;
 }
 
-export const Input: React.FC<InputProps> = ({ label, error, icon: Icon, className = '', ...props }) => {
-  return (
-    <div className="w-full">
-      {label && (
-        <label className="block text-sm font-medium text-slate-700 mb-1.5">
-          {label}
-        </label>
-      )}
-      <div className="relative">
-        {Icon && (
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-            <Icon size={18} />
-          </div>
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, label, error, icon: Icon, ...props }, ref) => {
+    return (
+      <div className="w-full">
+        {label && (
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            {label}
+          </label>
         )}
-        <input
-          className={`
-            w-full rounded-xl border border-slate-200 bg-white/50 backdrop-blur-sm
-            ${Icon ? 'pl-10' : 'pl-4'} pr-4 py-2.5
-            text-slate-900 placeholder-slate-400
-            focus:border-synapse-500 focus:ring-2 focus:ring-synapse-200 focus:outline-none
-            transition-all duration-200
-            disabled:bg-slate-50 disabled:text-slate-500
-            ${error ? 'border-red-500 focus:ring-red-200' : ''}
-            ${className}
-          `}
-          {...props}
-        />
+        <div className="relative">
+          {Icon && (
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-muted-foreground">
+              <Icon size={18} />
+            </div>
+          )}
+          <input
+            type={type}
+            className={cn(
+              "flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              Icon && "pl-10",
+              error && "border-destructive focus-visible:ring-destructive",
+              className
+            )}
+            ref={ref}
+            {...props}
+          />
+        </div>
+        {error && <p className="mt-1 text-sm text-destructive">{error}</p>}
       </div>
-      {error && <p className="mt-1 text-sm text-red-500">{error}</p>}
-    </div>
-  );
-};
+    );
+  }
+);
+Input.displayName = "Input";
+
+export { Input };
