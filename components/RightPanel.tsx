@@ -50,9 +50,19 @@ export const RightPanel: React.FC = () => {
       }
 
       try {
+        // Sanitize IDs
+        const validFriendIds = userProfile.friends.filter(id => id && typeof id === 'string' && id.trim().length > 0);
+        
+        if (validFriendIds.length === 0) {
+           setContacts([]);
+           setBirthdayUsers([]);
+           setLoadingContacts(false);
+           return;
+        }
+
         // Fetch only first 20 friends for contacts list
-        const friendIds = userProfile.friends.slice(0, 20);
-        const q = query(collection(db, 'users'), where(documentId(), 'in', friendIds));
+        const chunk = validFriendIds.slice(0, 20);
+        const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
         const snap = await getDocs(q);
         const friendsList = snap.docs.map(doc => doc.data() as UserProfile);
         

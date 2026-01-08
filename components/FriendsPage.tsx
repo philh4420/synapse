@@ -59,20 +59,28 @@ export const FriendsPage: React.FC = () => {
         }
         
         try {
-            const friendsList = [...userProfile.friends];
-            const fetchedFriends: UserProfile[] = [];
+            // Sanitize friends list to remove empty strings or invalid IDs
+            const validFriends = userProfile.friends.filter(id => id && typeof id === 'string' && id.trim().length > 0);
             
+            if (validFriends.length === 0) {
+                setFriends([]);
+                setLoading(false);
+                return;
+            }
+
             // Batch fetch friends (Firestore limits 'in' query to 10-30 items depending on sdk version, usually 10 is safe for 'in')
             // For a production app, we would paginate this properly.
-            const chunk = friendsList.slice(0, 20);
+            const chunk = validFriends.slice(0, 20);
             
             if (chunk.length > 0) {
                 const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
                 const snap = await getDocs(q);
+                const fetchedFriends: UserProfile[] = [];
                 snap.forEach(d => fetchedFriends.push(d.data() as UserProfile));
+                setFriends(fetchedFriends);
+            } else {
+                setFriends([]);
             }
-            
-            setFriends(fetchedFriends);
         } catch (e) {
             console.error("Error fetching friends list", e);
         } finally {

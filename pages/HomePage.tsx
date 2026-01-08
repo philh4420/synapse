@@ -65,8 +65,8 @@ export const HomePage: React.FC = () => {
            {renderContent()}
         </div>
 
-        {/* Right Panel - Always visible on XL screens */}
-        <div className="hidden xl:block w-[280px] xl:w-[360px] flex-shrink-0 z-10">
+        {/* Right Panel - Always visible on LG screens and up to mimic Facebook */}
+        <div className="hidden lg:block w-[280px] xl:w-[360px] flex-shrink-0 z-10">
            <RightPanel />
         </div>
 
