@@ -18,8 +18,9 @@ export const uploadToCloudinary = async (file: File): Promise<string> => {
   formData.append('signature', signature);
 
   try {
+    // Use 'auto' instead of 'image' to support both images and videos
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/auto/upload`,
       {
         method: 'POST',
         body: formData,

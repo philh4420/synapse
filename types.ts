@@ -42,6 +42,7 @@ export interface Post {
   shares: number;
   image?: string; // Legacy support
   images?: string[]; // Multiple images
+  video?: string; // Video URL
   likedByUsers: string[]; // Legacy array
   
   // New Features
