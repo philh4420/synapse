@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { Search, MoreHorizontal, Video, Gift, Plus, ExternalLink, Trash2 } from 'lucide-react';
-import { collection, query, limit, getDocs, addDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, query, limit, getDocs, addDoc, deleteDoc, doc, onSnapshot, where, documentId } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { UserProfile, SponsoredAd } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -39,25 +40,30 @@ export const RightPanel: React.FC = () => {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Fetch Users for Contacts & Birthdays
-    const fetchUsers = async () => {
-      try {
-        const usersQuery = query(collection(db, 'users'), limit(50));
-        const usersSnap = await getDocs(usersQuery);
-        
-        const allUsers = usersSnap.docs
-          .map(doc => doc.data() as UserProfile)
-          .filter(u => u.uid !== user.uid);
-          
-        setContacts(allUsers.slice(0, 15)); // Take first 15 for contacts
+    // 1. Fetch Contacts (Actual Friends)
+    const fetchContacts = async () => {
+      if (!userProfile?.friends || userProfile.friends.length === 0) {
+        setContacts([]);
+        setBirthdayUsers([]);
+        setLoadingContacts(false);
+        return;
+      }
 
-        // Calculate Birthdays (Mock logic: In real app, query by date)
-        // Checks if user.birthDate matches today M-D
+      try {
+        // Fetch only first 20 friends for contacts list
+        const friendIds = userProfile.friends.slice(0, 20);
+        const q = query(collection(db, 'users'), where(documentId(), 'in', friendIds));
+        const snap = await getDocs(q);
+        const friendsList = snap.docs.map(doc => doc.data() as UserProfile);
+        
+        setContacts(friendsList);
+
+        // Calculate Birthdays from friends list
         const today = new Date();
         const currentMonth = today.getMonth() + 1;
         const currentDay = today.getDate();
 
-        const bdays = allUsers.filter(u => {
+        const bdays = friendsList.filter(u => {
           if (!u.birthDate) return false;
           const [_, m, d] = u.birthDate.split('-').map(Number);
           return m === currentMonth && d === currentDay;
@@ -65,13 +71,13 @@ export const RightPanel: React.FC = () => {
         
         setBirthdayUsers(bdays);
       } catch (error) {
-        console.error("Error fetching users:", error);
+        console.error("Error fetching contacts:", error);
       } finally {
         setLoadingContacts(false);
       }
     };
 
-    fetchUsers();
+    fetchContacts();
 
     // 2. Real-time Listener for Ads
     const adsQuery = query(collection(db, 'ads'));
@@ -84,7 +90,7 @@ export const RightPanel: React.FC = () => {
     });
 
     return () => unsubscribeAds();
-  }, [user]);
+  }, [user, userProfile?.friends]); // Refetch when friends change
 
   // Handle Create Ad
   const handleCreateAd = async () => {
@@ -279,7 +285,9 @@ export const RightPanel: React.FC = () => {
               </div>
             ))
           ) : (
-            <div className="px-2 text-sm text-slate-500 italic mt-2">No contacts found.</div>
+            <div className="px-2 text-sm text-slate-500 italic mt-2">
+               {userProfile?.friends?.length === 0 ? "Add friends to see contacts" : "No contacts available"}
+            </div>
           )}
         </div>
       </div>

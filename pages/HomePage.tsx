@@ -1,9 +1,11 @@
+
 import React, { useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { Feed } from '../components/Feed';
 import { RightPanel } from '../components/RightPanel';
 import { AdminPanel } from '../components/AdminPanel';
 import { Profile } from '../components/Profile';
+import { FriendsPage } from '../components/FriendsPage';
 import { Header } from '../components/Header';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +21,8 @@ export const HomePage: React.FC = () => {
         return <Feed />;
       case 'profile':
         return <Profile />;
+      case 'friends':
+        return <FriendsPage />;
       case 'admin':
         return <AdminPanel />;
       default:
@@ -72,7 +76,7 @@ export const HomePage: React.FC = () => {
              <X />
           </button>
           <div className="space-y-4">
-            {['Feed', 'Explore', 'Watch', 'Marketplace', 'Groups', 'Profile'].map((item) => (
+            {['Feed', 'Friends', 'Explore', 'Watch', 'Marketplace', 'Groups', 'Profile'].map((item) => (
               <button 
                 key={item}
                 onClick={() => { setActiveTab(item.toLowerCase() === 'watch' ? 'videos' : item.toLowerCase()); setMobileMenuOpen(false); }}

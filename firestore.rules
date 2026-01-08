@@ -65,6 +65,22 @@ service cloud.firestore {
       allow list: if request.auth != null;
     }
 
+    // Rules for friend requests
+    match /friend_requests/{requestId} {
+      // Allow read if user is sender or receiver
+      allow read: if request.auth != null && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      
+      // Allow create if senderId matches auth
+      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+      
+      // Allow delete if sender or receiver (cancel or accept)
+      allow delete: if request.auth != null && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+    }
+
+    match /friend_requests {
+      allow list: if request.auth != null;
+    }
+
     // Rules for 'stories'
     match /stories/{storyId} {
       allow read: if request.auth != null;

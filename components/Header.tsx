@@ -3,10 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Home, Compass, Users, LayoutGrid, MessageCircle, Bell, ChevronDown, 
   Activity, Shield, Store, MonitorPlay, X, LogOut, Settings, HelpCircle, 
-  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, CheckCircle
+  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, UserPlus, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { collection, query, where, getDocs, limit, onSnapshot, orderBy, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, limit, onSnapshot, orderBy, updateDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { UserProfile, Notification } from '../types';
 import { cn } from '../lib/utils';
@@ -65,17 +65,15 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
   const navItems = [
     { id: 'feed', icon: Home, label: 'Home' },
-    { id: 'explore', icon: Compass, label: 'Explore' },
+    { id: 'friends', icon: Users, label: 'Friends' }, // Updated from Groups to Friends for better FB mimic
     { id: 'videos', icon: MonitorPlay, label: 'Watch' },
     { id: 'marketplace', icon: Store, label: 'Marketplace' },
-    { id: 'groups', icon: Users, label: 'Groups' },
   ];
 
   if (userProfile?.role === 'admin') {
       navItems.push({ id: 'admin', icon: Shield, label: 'Admin' });
   }
 
-  // Handle click outside for search
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -86,7 +84,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Real-time Notifications Listener
   useEffect(() => {
     if (!user) return;
 
@@ -111,7 +108,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     return () => unsubscribe();
   }, [user]);
 
-  // Mark notification as read
   const markAsRead = async (notif: Notification) => {
     if (notif.read) return;
     try {
@@ -126,7 +122,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     unread.forEach(n => markAsRead(n));
   };
 
-  // Search Users
   useEffect(() => {
     const searchUsers = async () => {
       if (!searchQuery.trim()) {
@@ -158,6 +153,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const NotificationItem = ({ notif }: { notif: Notification }) => {
     let message = '';
     let icon = null;
+    let targetTab = 'feed';
 
     switch (notif.type) {
       case 'like':
@@ -171,13 +167,23 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       case 'follow':
         message = 'started following you';
         break;
+      case 'friend_request':
+        message = 'sent you a friend request';
+        targetTab = 'friends';
+        icon = <div className="absolute -bottom-1 -right-1 bg-blue-500 rounded-full p-1 border-2 border-white"><UserPlus className="w-3 h-3 text-white fill-current" /></div>;
+        break;
+      case 'friend_accept':
+        message = 'accepted your friend request';
+        targetTab = 'profile'; // Or friends
+        icon = <div className="absolute -bottom-1 -right-1 bg-green-600 rounded-full p-1 border-2 border-white"><UserCheck className="w-3 h-3 text-white fill-current" /></div>;
+        break;
       default:
         message = 'interacted with your content';
     }
 
     return (
       <div 
-        onClick={() => { markAsRead(notif); setActiveTab('feed'); }}
+        onClick={() => { markAsRead(notif); setActiveTab(targetTab); }}
         className={cn(
           "flex items-start gap-3 p-2 rounded-lg cursor-pointer transition-colors relative",
           notif.read ? "hover:bg-slate-50" : "bg-blue-50/50 hover:bg-blue-50"
@@ -238,7 +244,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
              </button>
            )}
 
-           {/* Search Results Dropdown */}
             {isSearching && searchQuery && (
               <div className="absolute top-12 left-0 w-[300px] bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
                 {searchResults.length > 0 ? (
@@ -297,6 +302,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                               )} 
                               strokeWidth={activeTab === item.id ? 2.5 : 2} 
                             />
+                            {item.id === 'friends' && notifications.some(n => n.type === 'friend_request' && !n.read) && (
+                                <div className="absolute top-2 right-8 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                            )}
                         </div>
                         {activeTab === item.id && (
                             <div className="absolute bottom-0 h-[3px] bg-synapse-600 w-full max-w-[110px] rounded-t-full"></div>

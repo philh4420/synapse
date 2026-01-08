@@ -11,6 +11,7 @@ export interface UserProfile {
   bio?: string;
   followers?: string[];
   following?: string[];
+  friends?: string[]; // Array of UIDs
   birthDate?: string; // ISO Date string YYYY-MM-DD
   
   // Extended Details
@@ -108,9 +109,18 @@ export interface Notification {
     displayName: string;
     photoURL: string;
   };
-  type: 'like' | 'comment' | 'follow';
+  type: 'like' | 'comment' | 'follow' | 'friend_request' | 'friend_accept';
   postId?: string; // ID of the post interacted with
   previewText?: string; // Snippet of comment or post
   read: boolean;
   timestamp: any;
+}
+
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  timestamp: any;
+  sender?: UserProfile; // Joined data
 }
