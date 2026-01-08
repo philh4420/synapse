@@ -65,6 +65,8 @@ export interface Comment {
     avatar: string;
   };
   timestamp: any;
+  likes?: number; // New: Like count for comments
+  likedByUsers?: string[]; // New: Users who liked this comment
 }
 
 export interface Story {

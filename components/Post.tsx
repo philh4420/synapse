@@ -45,11 +45,14 @@ const REACTIONS: { type: ReactionType; emoji: string; label: string; color: stri
 
 const EMOJIS = ['🙂', '😀', '😂', '😍', '🥰', '😎', '😭', '😡', '👍', '👎', '🎉', '🔥', '❤️', '💔', '✨', '🎁', '👋', '🙏', '🤔', '🙄', '😴', '🤮', '🤯', '🥳'];
 
-export const Post: React.FC<{ post: PostType }> = ({ post }) => {
+export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
   const { user, userProfile } = useAuth();
   const { toast } = useToast();
   
   // -- State --
+  // Use local state synced with Firestore for real-time updates
+  const [currentPost, setCurrentPost] = useState<PostType>(initialPost);
+
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   
@@ -58,7 +61,9 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
   const [commentImage, setCommentImage] = useState<File | null>(null);
   const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
   const [isPostingComment, setIsPostingComment] = useState(false);
-  const commentInputRef = useRef<HTMLInputElement>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null); // For camera/image in comment
+  const textInputRef = useRef<HTMLInputElement>(null); // For text input focus
   
   // Comment Features (Gif/Emoji)
   const [gifSearch, setGifSearch] = useState('');
@@ -71,8 +76,8 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
   // Post Edit Mode
   const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(post.content);
-  const [editImages, setEditImages] = useState<string[]>(post.images || (post.image ? [post.image] : []));
+  const [editContent, setEditContent] = useState(initialPost.content);
+  const [editImages, setEditImages] = useState<string[]>(initialPost.images || (initialPost.image ? [initialPost.image] : []));
   const [isSaving, setIsSaving] = useState(false);
   
   // Delete
@@ -82,51 +87,70 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
   const [currentReaction, setCurrentReaction] = useState<ReactionType | null>(null);
 
   // -- Derived --
-  const displayImages = isEditing ? editImages : (post.images || (post.image ? [post.image] : []));
-  const isAuthor = user?.uid === post.author.uid;
+  const displayImages = isEditing ? editImages : (currentPost.images || (currentPost.image ? [currentPost.image] : []));
+  const isAuthor = user?.uid === currentPost.author.uid;
 
   // -- Effects --
 
-  // Sync Reaction State
+  // 1. Real-time Post Listener
+  // This ensures that if someone else likes the post, it updates instantly.
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'posts', initialPost.id), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setCurrentPost({
+          id: docSnap.id,
+          ...data,
+          timestamp: data.timestamp?.toDate() || new Date(),
+        } as PostType);
+      } else {
+        // Document deleted
+        setIsDeleting(true);
+      }
+    });
+    return () => unsub();
+  }, [initialPost.id]);
+
+  // 2. Sync Reaction State
   useEffect(() => {
     if (user) {
-      if (post.reactions && post.reactions[user.uid]) {
-        setCurrentReaction(post.reactions[user.uid]);
-      } else if (post.likedByUsers?.includes(user.uid)) {
+      if (currentPost.reactions && currentPost.reactions[user.uid]) {
+        setCurrentReaction(currentPost.reactions[user.uid]);
+      } else if (currentPost.likedByUsers?.includes(user.uid)) {
         // Fallback for legacy data
         setCurrentReaction('like');
       } else {
         setCurrentReaction(null);
       }
     }
-  }, [post.reactions, post.likedByUsers, user]);
+  }, [currentPost.reactions, currentPost.likedByUsers, user]);
 
-  // Fetch Comments
+  // 3. Fetch Comments
   useEffect(() => {
     if (showComments) {
-      const q = query(collection(db, 'posts', post.id, 'comments'), orderBy('timestamp', 'asc'));
+      const q = query(collection(db, 'posts', currentPost.id, 'comments'), orderBy('timestamp', 'asc'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Comment[]);
       });
       return () => unsubscribe();
     }
-  }, [showComments, post.id]);
+  }, [showComments, currentPost.id]);
 
   // -- Handlers --
 
   const createNotification = async (type: 'like' | 'comment', previewText?: string) => {
-    if (!user || user.uid === post.author.uid) return; // Don't notify self
+    if (!user || user.uid === currentPost.author.uid) return; // Don't notify self
 
     try {
       await addDoc(collection(db, 'notifications'), {
-        recipientUid: post.author.uid,
+        recipientUid: currentPost.author.uid,
         sender: {
           uid: user.uid,
           displayName: userProfile?.displayName || user.displayName || 'Someone',
           photoURL: userProfile?.photoURL || user.photoURL || ''
         },
         type,
-        postId: post.id,
+        postId: currentPost.id,
         previewText: previewText || '',
         read: false,
         timestamp: serverTimestamp()
@@ -144,7 +168,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     const newReaction = oldReaction === type ? null : type; 
     setCurrentReaction(newReaction);
 
-    const postRef = doc(db, 'posts', post.id);
+    const postRef = doc(db, 'posts', currentPost.id);
     try {
       if (oldReaction && !newReaction) {
         // Removing reaction
@@ -162,7 +186,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         });
         
         // Create Notification
-        await createNotification('like', post.content.substring(0, 30));
+        await createNotification('like', currentPost.content.substring(0, 30));
       } else if (oldReaction && newReaction && oldReaction !== newReaction) {
         // Changing reaction
         await updateDoc(postRef, { 
@@ -206,7 +230,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     setShowGifPicker(false);
     
     try {
-       await addDoc(collection(db, 'posts', post.id, 'comments'), {
+       await addDoc(collection(db, 'posts', currentPost.id, 'comments'), {
         text: '',
         gif: gifUrl,
         author: {
@@ -214,9 +238,11 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
           name: userProfile?.displayName || user.displayName || 'User',
           avatar: userProfile?.photoURL || user.photoURL || ''
         },
+        likes: 0,
+        likedByUsers: [],
         timestamp: serverTimestamp()
       });
-      await updateDoc(doc(db, 'posts', post.id), { comments: increment(1) });
+      await updateDoc(doc(db, 'posts', currentPost.id), { comments: increment(1) });
       
       // Notify
       await createNotification('comment', 'posted a GIF');
@@ -238,7 +264,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         imageUrl = await uploadToCloudinary(commentImage);
       }
 
-      await addDoc(collection(db, 'posts', post.id, 'comments'), {
+      await addDoc(collection(db, 'posts', currentPost.id, 'comments'), {
         text: commentText,
         image: imageUrl,
         author: {
@@ -246,10 +272,12 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
           name: userProfile?.displayName || user.displayName || 'User',
           avatar: userProfile?.photoURL || user.photoURL || ''
         },
+        likes: 0,
+        likedByUsers: [],
         timestamp: serverTimestamp()
       });
 
-      await updateDoc(doc(db, 'posts', post.id), { comments: increment(1) });
+      await updateDoc(doc(db, 'posts', currentPost.id), { comments: increment(1) });
       
       // Notify
       await createNotification('comment', commentText.substring(0, 30));
@@ -269,7 +297,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
   const handleEditComment = async (commentId: string) => {
       if (!editCommentText.trim()) return;
       try {
-        await updateDoc(doc(db, 'posts', post.id, 'comments', commentId), {
+        await updateDoc(doc(db, 'posts', currentPost.id, 'comments', commentId), {
           text: editCommentText
         });
         setEditingCommentId(null);
@@ -283,23 +311,52 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm("Delete this comment?")) return;
     try {
-       await deleteDoc(doc(db, 'posts', post.id, 'comments', commentId));
-       await updateDoc(doc(db, 'posts', post.id), { comments: increment(-1) });
+       await deleteDoc(doc(db, 'posts', currentPost.id, 'comments', commentId));
+       await updateDoc(doc(db, 'posts', currentPost.id), { comments: increment(-1) });
        toast("Comment deleted", "success");
     } catch (error) {
        toast("Failed to delete comment", "error");
     }
   };
 
+  // Toggle Like on Comment
+  const toggleCommentLike = async (comment: Comment) => {
+    if (!user) return;
+    const commentRef = doc(db, 'posts', currentPost.id, 'comments', comment.id);
+    const isLiked = comment.likedByUsers?.includes(user.uid);
+
+    try {
+      if (isLiked) {
+         await updateDoc(commentRef, {
+            likes: increment(-1),
+            likedByUsers: arrayRemove(user.uid)
+         });
+      } else {
+         await updateDoc(commentRef, {
+            likes: increment(1),
+            likedByUsers: arrayUnion(user.uid)
+         });
+      }
+    } catch (e) {
+      console.error("Error liking comment", e);
+    }
+  };
+
+  // Reply to Comment
+  const handleReply = (authorName: string) => {
+     setCommentText(`@${authorName} `);
+     textInputRef.current?.focus();
+  };
+
   const handleUpdatePost = async () => {
-    if (!editContent.trim() && editImages.length === 0 && !post.gif) {
+    if (!editContent.trim() && editImages.length === 0 && !currentPost.gif) {
        toast("Post cannot be empty", "error");
        return;
     }
     
     setIsSaving(true);
     try {
-      await updateDoc(doc(db, 'posts', post.id), {
+      await updateDoc(doc(db, 'posts', currentPost.id), {
         content: editContent,
         images: editImages,
         image: editImages.length > 0 ? editImages[0] : null 
@@ -318,7 +375,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     if (!confirm("Are you sure you want to delete this post?")) return;
     setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'posts', post.id));
+      await deleteDoc(doc(db, 'posts', currentPost.id));
       toast("Post deleted", "success");
     } catch (error) {
       console.error("Error deleting post:", error);
@@ -439,27 +496,27 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
       <div className="p-3 pb-2 flex justify-between items-start">
         <div className="flex gap-2.5">
            <Avatar className="h-10 w-10 cursor-pointer hover:brightness-95">
-              <AvatarImage src={post.author.avatar} />
-              <AvatarFallback>{post.author.name[0]}</AvatarFallback>
+              <AvatarImage src={currentPost.author.avatar} />
+              <AvatarFallback>{currentPost.author.name[0]}</AvatarFallback>
            </Avatar>
            <div className="flex flex-col pt-0.5">
               <div className="font-semibold text-slate-900 text-[15px] leading-tight">
-                 <span className="hover:underline cursor-pointer">{post.author.name}</span>
+                 <span className="hover:underline cursor-pointer">{currentPost.author.name}</span>
                  {/* Metadata display */}
-                 {(post.feeling || post.location || (post.taggedUsers && post.taggedUsers.length > 0)) && (
+                 {(currentPost.feeling || currentPost.location || (currentPost.taggedUsers && currentPost.taggedUsers.length > 0)) && (
                     <span className="font-normal text-slate-600">
-                       {post.feeling && ` is ${post.feeling}`}
-                       {post.taggedUsers?.length ? ` with ${post.taggedUsers[0]}` : ''}
-                       {post.location && ` at ${post.location}`}
+                       {currentPost.feeling && ` is ${currentPost.feeling}`}
+                       {currentPost.taggedUsers?.length ? ` with ${currentPost.taggedUsers[0]}` : ''}
+                       {currentPost.location && ` at ${currentPost.location}`}
                     </span>
                  )}
               </div>
               <div className="flex items-center gap-1 text-slate-500 text-[13px]">
                  <span className="hover:underline cursor-pointer">
-                    {formatDistanceToNow(post.timestamp, { addSuffix: true }).replace('about ', '').replace('less than a minute ago', 'Just now')}
+                    {formatDistanceToNow(currentPost.timestamp, { addSuffix: true }).replace('about ', '').replace('less than a minute ago', 'Just now')}
                  </span>
                  <span className="text-[10px] font-bold">·</span>
-                 {getPrivacyIcon(post.privacy)}
+                 {getPrivacyIcon(currentPost.privacy)}
               </div>
            </div>
         </div>
@@ -476,7 +533,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
               <DropdownMenuSeparator className="bg-slate-100" />
               {isAuthor && (
                 <>
-                  <DropdownMenuItem onClick={() => { setIsEditing(true); setEditContent(post.content); setEditImages(post.images || (post.image ? [post.image] : [])); }} className="gap-3 cursor-pointer font-medium py-2 rounded-lg">
+                  <DropdownMenuItem onClick={() => { setIsEditing(true); setEditContent(currentPost.content); setEditImages(currentPost.images || (currentPost.image ? [currentPost.image] : [])); }} className="gap-3 cursor-pointer font-medium py-2 rounded-lg">
                     <Edit3 className="w-5 h-5" /> Edit post
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleDeletePost} className="gap-3 cursor-pointer font-medium py-2 text-red-600 rounded-lg">
@@ -500,14 +557,14 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
             />
          </div>
       ) : (
-         post.background && !displayImages.length && !post.gif ? (
-           <div className={`w-full min-h-[350px] flex items-center justify-center p-8 text-center ${post.background}`}>
-              <p className="whitespace-pre-wrap font-bold text-2xl">{post.content}</p>
+         currentPost.background && !displayImages.length && !currentPost.gif ? (
+           <div className={`w-full min-h-[350px] flex items-center justify-center p-8 text-center ${currentPost.background}`}>
+              <p className="whitespace-pre-wrap font-bold text-2xl">{currentPost.content}</p>
            </div>
          ) : (
            <div className="px-3 pb-3">
               <p className="text-[15px] text-slate-900 leading-normal whitespace-pre-wrap">
-                 {formatTextWithLinks(post.content)}
+                 {formatTextWithLinks(currentPost.content)}
               </p>
            </div>
          )
@@ -515,9 +572,9 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
       {renderPhotoGrid()}
       
-      {post.gif && !isEditing && (
+      {currentPost.gif && !isEditing && (
         <div className="w-full bg-slate-50 border-t border-b border-slate-100">
-           <img src={post.gif} className="w-full h-auto object-cover" />
+           <img src={currentPost.gif} className="w-full h-auto object-cover" />
         </div>
       )}
 
@@ -536,17 +593,17 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         <>
           <div className="px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-1.5 cursor-pointer hover:underline decoration-slate-500">
-                {(post.likes > 0 || Object.keys(post.reactions || {}).length > 0) && (
+                {(currentPost.likes > 0 || Object.keys(currentPost.reactions || {}).length > 0) && (
                    <div className="flex -space-x-1">
                       <div className="bg-synapse-600 rounded-full p-1 z-20 border border-white">
                          <ThumbsUp className="w-2 h-2 text-white fill-current" />
                       </div>
                    </div>
                 )}
-                <span className="text-slate-500 text-[15px]">{post.likes > 0 ? post.likes : 'Be the first to like this'}</span>
+                <span className="text-slate-500 text-[15px]">{currentPost.likes > 0 ? currentPost.likes : 'Be the first to like this'}</span>
             </div>
             <div className="flex items-center gap-3 text-slate-500 text-[15px]">
-                {post.comments > 0 && <span onClick={() => setShowComments(true)} className="hover:underline cursor-pointer">{post.comments} comments</span>}
+                {currentPost.comments > 0 && <span onClick={() => setShowComments(true)} className="hover:underline cursor-pointer">{currentPost.comments} comments</span>}
             </div>
           </div>
 
@@ -648,6 +705,14 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
                                         </DropdownMenu>
                                      </div>
                                   )}
+                                  
+                                  {/* Like Count Tooltip (Simple) */}
+                                  {(comment.likes || 0) > 0 && (
+                                     <div className="absolute -right-2 -bottom-2 bg-white rounded-full px-1.5 py-0.5 shadow-sm border border-slate-200 flex items-center gap-1">
+                                        <div className="bg-synapse-600 rounded-full p-0.5"><ThumbsUp className="w-2 h-2 text-white" /></div>
+                                        <span className="text-[11px] text-slate-500 font-semibold">{comment.likes}</span>
+                                     </div>
+                                  )}
                                 </div>
                                 {comment.image && (
                                   <div className="mt-2 rounded-xl overflow-hidden max-w-[200px] border border-slate-200">
@@ -660,9 +725,22 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
                                       <div className="absolute bottom-1 right-1 bg-black/50 text-white text-[9px] px-1 rounded">GIF</div>
                                    </div>
                                 )}
-                                <div className="flex gap-4 px-2 mt-0.5">
-                                  <span className="text-xs font-bold text-slate-500 cursor-pointer hover:underline">Like</span>
-                                  <span className="text-xs font-bold text-slate-500 cursor-pointer hover:underline">Reply</span>
+                                <div className="flex gap-4 px-2 mt-0.5 select-none">
+                                  <span 
+                                     onClick={() => toggleCommentLike(comment)}
+                                     className={cn(
+                                       "text-xs font-bold cursor-pointer hover:underline",
+                                       comment.likedByUsers?.includes(user?.uid || '') ? "text-synapse-600" : "text-slate-500"
+                                     )}
+                                  >
+                                    Like
+                                  </span>
+                                  <span 
+                                     onClick={() => handleReply(comment.author.name)}
+                                     className="text-xs font-bold text-slate-500 cursor-pointer hover:underline"
+                                  >
+                                    Reply
+                                  </span>
                                   <span className="text-xs text-slate-400">{comment.timestamp ? formatDistanceToNow(comment.timestamp.toDate()) : 'Just now'}</span>
                                 </div>
                               </>
@@ -678,6 +756,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
                   <form onSubmit={handleComment} className="flex-1 relative z-10">
                       <div className="relative bg-[#F0F2F5] rounded-2xl flex items-center transition-all focus-within:ring-1 focus-within:ring-slate-300">
                         <input 
+                           ref={textInputRef}
                            value={commentText} 
                            onChange={(e) => setCommentText(e.target.value)} 
                            placeholder="Write a comment..." 
@@ -741,8 +820,8 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
                              </PopoverContent>
                            </Popover>
 
-                           <input type="file" ref={commentInputRef} onChange={handleCommentFileSelect} className="hidden" accept="image/*" />
-                           <button type="button" onClick={() => commentInputRef.current?.click()} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500">
+                           <input type="file" ref={fileInputRef} onChange={handleCommentFileSelect} className="hidden" accept="image/*" />
+                           <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500">
                               <Camera className="w-4 h-4" />
                            </button>
                            <button type="submit" disabled={(!commentText.trim() && !commentImage) || isPostingComment} className="p-1.5 rounded-full text-synapse-600 hover:bg-slate-200 disabled:text-transparent">
