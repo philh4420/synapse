@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ThumbsUp, MessageCircle, Share2, MoreHorizontal, Globe, 
-  Trash2, AlertCircle, EyeOff, Send, Smile, Camera, X, MessageSquare, Users, Lock, Edit3, Save
+  Trash2, Send, X, MessageSquare, Users, Lock, Edit3, Camera, Loader2
 } from 'lucide-react';
-import { Post as PostType } from '../types';
+import { Post as PostType, ReactionType, Comment } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
   doc, updateDoc, increment, arrayUnion, arrayRemove, 
-  collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc 
+  collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, deleteDoc, deleteField 
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
+import { uploadToCloudinary } from '../utils/upload'; // Reusing your existing upload util
 import { Card } from './ui/Card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/Avatar';
 import { Button } from './ui/Button';
@@ -25,49 +26,65 @@ import {
 } from './ui/DropdownMenu';
 import { cn } from '../lib/utils';
 
-interface Comment {
-  id: string;
-  text: string;
-  author: {
-    uid: string;
-    name: string;
-    avatar: string;
-  };
-  timestamp: any;
-}
+// --- Assets ---
+const REACTIONS: { type: ReactionType; emoji: string; label: string; color: string }[] = [
+  { type: 'like', emoji: '👍', label: 'Like', color: 'text-blue-600' },
+  { type: 'love', emoji: '❤️', label: 'Love', color: 'text-red-500' },
+  { type: 'care', emoji: '🥰', label: 'Care', color: 'text-amber-500' },
+  { type: 'haha', emoji: '😂', label: 'Haha', color: 'text-yellow-500' },
+  { type: 'wow', emoji: '😮', label: 'Wow', color: 'text-yellow-500' },
+  { type: 'sad', emoji: '😢', label: 'Sad', color: 'text-yellow-500' },
+  { type: 'angry', emoji: '😡', label: 'Angry', color: 'text-orange-600' },
+];
 
 export const Post: React.FC<{ post: PostType }> = ({ post }) => {
   const { user, userProfile } = useAuth();
   const { toast } = useToast();
   
+  // -- State --
   const [showComments, setShowComments] = useState(false);
-  const [commentText, setCommentText] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
   
-  // Edit State
+  // Comment Input
+  const [commentText, setCommentText] = useState('');
+  const [commentImage, setCommentImage] = useState<File | null>(null);
+  const [commentImagePreview, setCommentImagePreview] = useState<string | null>(null);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const commentInputRef = useRef<HTMLInputElement>(null);
+  
+  // Edit Mode
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [editImages, setEditImages] = useState<string[]>(post.images || (post.image ? [post.image] : []));
   const [isSaving, setIsSaving] = useState(false);
   
+  // Delete
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Optimistic UI state
-  const [isLiked, setIsLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes);
+  // Optimistic Reactions
+  const [currentReaction, setCurrentReaction] = useState<ReactionType | null>(null);
 
-  // Determine current images to show (Edit mode vs View mode)
+  // -- Derived --
   const displayImages = isEditing ? editImages : (post.images || (post.image ? [post.image] : []));
-
-  useEffect(() => {
-    if (user) {
-      setIsLiked(post.likedByUsers?.includes(user.uid) || false);
-    }
-    setLikeCount(post.likes);
-  }, [post.likedByUsers, post.likes, user]);
-
   const isAuthor = user?.uid === post.author.uid;
 
+  // -- Effects --
+
+  // Sync Reaction State
+  useEffect(() => {
+    if (user) {
+      if (post.reactions && post.reactions[user.uid]) {
+        setCurrentReaction(post.reactions[user.uid]);
+      } else if (post.likedByUsers?.includes(user.uid)) {
+        // Fallback for legacy data
+        setCurrentReaction('like');
+      } else {
+        setCurrentReaction(null);
+      }
+    }
+  }, [post.reactions, post.likedByUsers, user]);
+
+  // Fetch Comments
   useEffect(() => {
     if (showComments) {
       const q = query(collection(db, 'posts', post.id, 'comments'), orderBy('timestamp', 'asc'));
@@ -78,36 +95,68 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     }
   }, [showComments, post.id]);
 
-  const handleLike = async () => {
+  // -- Handlers --
+
+  const handleReaction = async (type: ReactionType) => {
     if (!user) return;
-    const newLikedState = !isLiked;
-    setIsLiked(newLikedState);
-    setLikeCount(prev => newLikedState ? prev + 1 : prev - 1);
+    
+    // Optimistic Update
+    const oldReaction = currentReaction;
+    const newReaction = oldReaction === type ? null : type; // Toggle off if same
+    setCurrentReaction(newReaction);
 
     const postRef = doc(db, 'posts', post.id);
     try {
-      if (!newLikedState) {
-        await updateDoc(postRef, { likes: increment(-1), likedByUsers: arrayRemove(user.uid) });
-      } else {
-        await updateDoc(postRef, { likes: increment(1), likedByUsers: arrayUnion(user.uid) });
+      // 1. Handle Legacy "likes" counter and array
+      if (oldReaction && !newReaction) {
+        // Removing reaction
+        await updateDoc(postRef, { 
+          likes: increment(-1), 
+          likedByUsers: arrayRemove(user.uid),
+          [`reactions.${user.uid}`]: deleteField() // Remove from map
+        } as any);
+      } else if (!oldReaction && newReaction) {
+        // Adding new reaction
+        await updateDoc(postRef, { 
+          likes: increment(1), 
+          likedByUsers: arrayUnion(user.uid),
+          [`reactions.${user.uid}`]: newReaction 
+        });
+      } else if (oldReaction && newReaction && oldReaction !== newReaction) {
+        // Changing reaction type (count stays same)
+        await updateDoc(postRef, { 
+          [`reactions.${user.uid}`]: newReaction 
+        });
       }
     } catch (error) {
-      console.error("Error updating like:", error);
-      setIsLiked(!newLikedState);
-      setLikeCount(prev => !newLikedState ? prev + 1 : prev - 1);
-      toast("Failed to update like", "error");
+      console.error("Error updating reaction:", error);
+      setCurrentReaction(oldReaction); // Revert
+      toast("Failed to react", "error");
+    }
+  };
+
+  const handleCommentFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      setCommentImage(file);
+      setCommentImagePreview(URL.createObjectURL(file));
     }
   };
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !commentText.trim()) return;
-    const tempComment = commentText;
-    setCommentText('');
-
+    if (!user || (!commentText.trim() && !commentImage)) return;
+    
+    setIsPostingComment(true);
     try {
+      let imageUrl = null;
+      if (commentImage) {
+        imageUrl = await uploadToCloudinary(commentImage);
+      }
+
       await addDoc(collection(db, 'posts', post.id, 'comments'), {
-        text: tempComment,
+        text: commentText,
+        image: imageUrl,
         author: {
           uid: user.uid,
           name: userProfile?.displayName || user.displayName || 'User',
@@ -115,12 +164,19 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         },
         timestamp: serverTimestamp()
       });
+
       await updateDoc(doc(db, 'posts', post.id), { comments: increment(1) });
+      
+      // Reset
+      setCommentText('');
+      setCommentImage(null);
+      setCommentImagePreview(null);
       toast("Comment posted", "success");
     } catch (error) {
       console.error("Error adding comment:", error);
-      setCommentText(tempComment);
       toast("Failed to post comment", "error");
+    } finally {
+      setIsPostingComment(false);
     }
   };
 
@@ -135,10 +191,10 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
       await updateDoc(doc(db, 'posts', post.id), {
         content: editContent,
         images: editImages,
-        image: editImages.length > 0 ? editImages[0] : null // Keep legacy support
+        image: editImages.length > 0 ? editImages[0] : null 
       });
       setIsEditing(false);
-      toast("Post updated successfully", "success");
+      toast("Post updated", "success");
     } catch (error) {
       console.error("Error updating post:", error);
       toast("Failed to update post", "error");
@@ -147,13 +203,8 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     }
   };
 
-  const handleRemoveImage = (indexToRemove: number) => {
-    setEditImages(prev => prev.filter((_, i) => i !== indexToRemove));
-  };
-
   const handleDeletePost = async () => {
-    if (!confirm("Are you sure you want to delete this post? This cannot be undone.")) return;
-    
+    if (!confirm("Are you sure you want to delete this post?")) return;
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, 'posts', post.id));
@@ -165,10 +216,22 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     }
   };
 
-  const getTimestamp = (timestamp: any) => {
-    if (!timestamp) return 'Just now';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return formatDistanceToNow(date, { addSuffix: true }).replace('about ', '').replace('less than a minute ago', 'Just now');
+  // --- Utility Renderers ---
+
+  const formatTextWithLinks = (text: string) => {
+    if (!text) return null;
+    // Regex to detect URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.split(urlRegex).map((part, i) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-synapse-600 hover:underline break-all">
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
   };
 
   const getPrivacyIcon = (p?: string) => {
@@ -179,19 +242,17 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
     }
   };
 
-  // --- Photo Grid Layout Logic ---
   const renderPhotoGrid = () => {
     if (displayImages.length === 0) return null;
 
     if (isEditing) {
-       // Edit Mode: Show grid of editable images
        return (
           <div className="p-3 grid grid-cols-2 gap-2">
              {displayImages.map((img, idx) => (
-                <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200">
-                   <img src={img} className="w-full h-32 object-cover" />
+                <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-200 aspect-video bg-slate-100">
+                   <img src={img} className="w-full h-full object-cover" />
                    <button 
-                      onClick={() => handleRemoveImage(idx)}
+                      onClick={() => setEditImages(prev => prev.filter((_, i) => i !== idx))}
                       className="absolute top-1 right-1 bg-white rounded-full p-1 shadow-md hover:bg-red-50 text-slate-500 hover:text-red-500 transition-colors"
                    >
                       <X className="w-4 h-4" />
@@ -202,46 +263,54 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
        );
     }
 
-    // View Mode Layouts
-    if (displayImages.length === 1) {
+    // Modern Facebook-style Collage Layouts
+    const count = displayImages.length;
+    
+    if (count === 1) {
       return (
-         <div className="w-full bg-slate-50 border-t border-b border-slate-100 flex items-center justify-center max-h-[700px] overflow-hidden cursor-pointer">
-            <img src={displayImages[0]} alt="" className="w-full h-auto max-h-[700px] object-cover" />
+         <div className="w-full bg-slate-50 border-t border-b border-slate-100 flex items-center justify-center max-h-[600px] overflow-hidden cursor-pointer">
+            <img src={displayImages[0]} alt="" className="w-full h-auto object-cover" />
          </div>
       );
-    } else if (displayImages.length === 2) {
+    }
+    
+    if (count === 2) {
       return (
-         <div className="w-full h-[350px] flex border-t border-b border-slate-100 cursor-pointer">
-            <img src={displayImages[0]} className="w-1/2 h-full object-cover border-r border-white" />
+         <div className="w-full h-[350px] flex gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden">
+            <img src={displayImages[0]} className="w-1/2 h-full object-cover" />
             <img src={displayImages[1]} className="w-1/2 h-full object-cover" />
          </div>
       );
-    } else if (displayImages.length === 3) {
+    }
+
+    if (count === 3) {
       return (
-         <div className="w-full h-[400px] flex border-t border-b border-slate-100 cursor-pointer">
-            <div className="w-2/3 h-full border-r border-white">
+         <div className="w-full h-[400px] flex gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden">
+            <div className="w-2/3 h-full">
                <img src={displayImages[0]} className="w-full h-full object-cover" />
             </div>
-            <div className="w-1/3 h-full flex flex-col">
-               <img src={displayImages[1]} className="w-full h-1/2 object-cover border-b border-white" />
+            <div className="w-1/3 h-full flex flex-col gap-0.5">
+               <img src={displayImages[1]} className="w-full h-1/2 object-cover" />
                <img src={displayImages[2]} className="w-full h-1/2 object-cover" />
             </div>
          </div>
       );
-    } else if (displayImages.length >= 4) {
+    }
+
+    if (count >= 4) {
       return (
-         <div className="w-full h-[400px] flex border-t border-b border-slate-100 cursor-pointer">
-            <div className="w-2/3 h-full border-r border-white">
-               <img src={displayImages[0]} className="w-full h-full object-cover" />
+         <div className="w-full h-[400px] flex flex-col gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden">
+            <div className="w-full h-3/5">
+                <img src={displayImages[0]} className="w-full h-full object-cover" />
             </div>
-            <div className="w-1/3 h-full flex flex-col">
-               <img src={displayImages[1]} className="w-full h-1/3 object-cover border-b border-white" />
-               <img src={displayImages[2]} className="w-full h-1/3 object-cover border-b border-white" />
-               <div className="w-full h-1/3 relative">
+            <div className="w-full h-2/5 flex gap-0.5">
+               <img src={displayImages[1]} className="w-1/3 h-full object-cover" />
+               <img src={displayImages[2]} className="w-1/3 h-full object-cover" />
+               <div className="w-1/3 h-full relative">
                   <img src={displayImages[3]} className="w-full h-full object-cover" />
-                  {displayImages.length > 4 && (
-                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold text-2xl">
-                        +{displayImages.length - 4}
+                  {count > 4 && (
+                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold text-2xl hover:bg-black/50 transition-colors">
+                        +{count - 4}
                      </div>
                   )}
                </div>
@@ -253,31 +322,32 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
   if (isDeleting) return null;
 
+  // -- Render Main --
   return (
-    <Card className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden animate-in fade-in duration-300">
+    <Card className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-visible animate-in fade-in duration-300">
       
-      {/* --- Header --- */}
+      {/* Header */}
       <div className="p-3 pb-2 flex justify-between items-start">
         <div className="flex gap-2.5">
            <Avatar className="h-10 w-10 cursor-pointer hover:brightness-95">
               <AvatarImage src={post.author.avatar} />
-              <AvatarFallback>{post.author.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+              <AvatarFallback>{post.author.name[0]}</AvatarFallback>
            </Avatar>
            <div className="flex flex-col pt-0.5">
               <div className="font-semibold text-slate-900 text-[15px] leading-tight">
                  <span className="hover:underline cursor-pointer">{post.author.name}</span>
-                 {/* Feeling / Location / Tag Metadata */}
+                 {/* Metadata display */}
                  {(post.feeling || post.location || (post.taggedUsers && post.taggedUsers.length > 0)) && (
                     <span className="font-normal text-slate-600">
                        {post.feeling && ` is ${post.feeling}`}
-                       {post.taggedUsers && post.taggedUsers.length > 0 && ` is with ${post.taggedUsers[0]} ${post.taggedUsers.length > 1 ? `and ${post.taggedUsers.length - 1} others` : ''}`}
+                       {post.taggedUsers?.length ? ` with ${post.taggedUsers[0]}` : ''}
                        {post.location && ` at ${post.location}`}
                     </span>
                  )}
               </div>
               <div className="flex items-center gap-1 text-slate-500 text-[13px]">
                  <span className="hover:underline cursor-pointer">
-                    {getTimestamp(post.timestamp)}
+                    {formatDistanceToNow(post.timestamp, { addSuffix: true }).replace('about ', '').replace('less than a minute ago', 'Just now')}
                  </span>
                  <span className="text-[10px] font-bold">·</span>
                  {getPrivacyIcon(post.privacy)}
@@ -285,7 +355,6 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
            </div>
         </div>
         
-        {/* Dropdown Menu - Only if not editing */}
         {!isEditing && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -311,7 +380,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         )}
       </div>
 
-      {/* --- Content (View vs Edit) --- */}
+      {/* Body */}
       {isEditing ? (
          <div className="px-3 pb-3">
             <textarea
@@ -323,19 +392,18 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
          </div>
       ) : (
          post.background && !displayImages.length && !post.gif ? (
-           // Background Post
            <div className={`w-full min-h-[350px] flex items-center justify-center p-8 text-center ${post.background}`}>
-              <p className="whitespace-pre-wrap">{post.content}</p>
+              <p className="whitespace-pre-wrap font-bold text-2xl">{post.content}</p>
            </div>
          ) : (
-           // Standard Post
            <div className="px-3 pb-3">
-              <p className="text-[15px] text-slate-900 leading-normal whitespace-pre-wrap">{post.content}</p>
+              <p className="text-[15px] text-slate-900 leading-normal whitespace-pre-wrap">
+                 {formatTextWithLinks(post.content)}
+              </p>
            </div>
          )
       )}
 
-      {/* --- Images / GIF --- */}
       {renderPhotoGrid()}
       
       {post.gif && !isEditing && (
@@ -344,7 +412,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
         </div>
       )}
 
-      {/* --- Edit Mode Actions --- */}
+      {/* Edit Actions */}
       {isEditing && (
          <div className="px-3 pb-3 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>Cancel</Button>
@@ -354,17 +422,20 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
          </div>
       )}
 
-      {/* --- Stats --- */}
+      {/* Social Stats */}
       {!isEditing && (
         <>
           <div className="px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-1.5 cursor-pointer hover:underline decoration-slate-500">
-                {likeCount > 0 && (
-                    <div className="bg-synapse-600 rounded-full p-1 flex items-center justify-center shadow-sm">
-                      <ThumbsUp className="w-2.5 h-2.5 text-white fill-current" />
-                    </div>
+                {(post.likes > 0 || Object.keys(post.reactions || {}).length > 0) && (
+                   <div className="flex -space-x-1">
+                      {/* Only show 'Like' icon if no other reactions for now to keep it simple, or map the reaction types present */}
+                      <div className="bg-synapse-600 rounded-full p-1 z-20 border border-white">
+                         <ThumbsUp className="w-2 h-2 text-white fill-current" />
+                      </div>
+                   </div>
                 )}
-                <span className="text-slate-500 text-[15px]">{likeCount > 0 ? likeCount : 'Be the first to like this'}</span>
+                <span className="text-slate-500 text-[15px]">{post.likes > 0 ? post.likes : 'Be the first to like this'}</span>
             </div>
             <div className="flex items-center gap-3 text-slate-500 text-[15px]">
                 {post.comments > 0 && <span onClick={() => setShowComments(true)} className="hover:underline cursor-pointer">{post.comments} comments</span>}
@@ -373,11 +444,48 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
           <div className="px-3"><Separator className="bg-slate-200" /></div>
 
-          {/* --- Actions --- */}
-          <div className="px-2 py-1 flex items-center justify-between">
-            <Button variant="ghost" onClick={handleLike} className={cn("flex-1 gap-2 font-semibold text-[15px] hover:bg-slate-100 rounded-lg h-9 transition-colors select-none", isLiked ? "text-synapse-600" : "text-slate-600")}>
-                <ThumbsUp className={cn("w-5 h-5 mb-0.5", isLiked && "fill-current")} /> Like
-            </Button>
+          {/* Action Bar (With Reactions) */}
+          <div className="px-2 py-1 flex items-center justify-between relative">
+            
+            {/* Reaction Button Container */}
+            <div className="group relative flex-1">
+              {/* Hover Dock */}
+              <div className="absolute -top-12 left-0 hidden group-hover:flex animate-in fade-in slide-in-from-bottom-2 duration-200 bg-white border border-slate-200 shadow-xl rounded-full p-1 gap-1 z-50">
+                {REACTIONS.map((r) => (
+                   <button 
+                     key={r.type}
+                     onClick={() => handleReaction(r.type)}
+                     className="p-1 hover:scale-125 transition-transform duration-200 text-2xl relative"
+                     title={r.label}
+                   >
+                     {r.emoji}
+                   </button>
+                ))}
+              </div>
+
+              {/* Main Button */}
+              <Button 
+                variant="ghost" 
+                onClick={() => handleReaction(currentReaction === 'like' ? 'like' : 'like')} // Simple toggle behavior for click, complex for hover
+                className={cn(
+                   "w-full gap-2 font-semibold text-[15px] hover:bg-slate-100 rounded-lg h-9 transition-colors select-none",
+                   currentReaction ? REACTIONS.find(r => r.type === currentReaction)?.color || "text-synapse-600" : "text-slate-600"
+                )}
+              >
+                 {currentReaction ? (
+                    <>
+                       <span className="text-lg leading-none">{REACTIONS.find(r => r.type === currentReaction)?.emoji}</span>
+                       <span>{REACTIONS.find(r => r.type === currentReaction)?.label}</span>
+                    </>
+                 ) : (
+                    <>
+                       <ThumbsUp className="w-5 h-5 mb-0.5" /> 
+                       <span>Like</span>
+                    </>
+                 )}
+              </Button>
+            </div>
+
             <Button variant="ghost" onClick={() => setShowComments(!showComments)} className="flex-1 gap-2 font-semibold text-[15px] text-slate-600 hover:bg-slate-100 rounded-lg h-9 transition-colors select-none">
                 <MessageSquare className="w-5 h-5 mb-0.5 scale-x-[-1]" /> Comment
             </Button>
@@ -388,29 +496,72 @@ export const Post: React.FC<{ post: PostType }> = ({ post }) => {
 
           <div className="px-3"><Separator className="bg-slate-200" /></div>
 
-          {/* --- Comments --- */}
+          {/* Comments Section */}
           {(showComments || comments.length > 0) && (
             <div className="px-4 pb-4 pt-3">
-                <div className="space-y-3 mb-4">
+                <div className="space-y-4 mb-4">
                   {comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-2 group">
-                        <Avatar className="w-8 h-8 mt-0.5"><AvatarImage src={comment.author.avatar} /><AvatarFallback>{comment.author.name[0]}</AvatarFallback></Avatar>
+                      <div key={comment.id} className="flex gap-2 group items-start">
+                        <Avatar className="w-8 h-8 mt-0.5 cursor-pointer hover:brightness-95">
+                           <AvatarImage src={comment.author.avatar} />
+                           <AvatarFallback>{comment.author.name[0]}</AvatarFallback>
+                        </Avatar>
                         <div className="flex-1 max-w-[90%]">
                             <div className="bg-[#F0F2F5] rounded-2xl px-3 py-2 inline-block relative">
-                              <span className="font-semibold text-[13px] text-slate-900 block">{comment.author.name}</span>
-                              <span className="text-[15px] text-slate-900 leading-snug">{comment.text}</span>
+                              <span className="font-semibold text-[13px] text-slate-900 block hover:underline cursor-pointer">{comment.author.name}</span>
+                              {comment.text && <span className="text-[15px] text-slate-900 leading-snug break-words">{formatTextWithLinks(comment.text)}</span>}
+                            </div>
+                            {comment.image && (
+                              <div className="mt-2 rounded-xl overflow-hidden max-w-[200px] border border-slate-200">
+                                 <img src={comment.image} className="w-full h-auto" />
+                              </div>
+                            )}
+                            <div className="flex gap-4 px-2 mt-0.5">
+                               <span className="text-xs font-bold text-slate-500 cursor-pointer hover:underline">Like</span>
+                               <span className="text-xs font-bold text-slate-500 cursor-pointer hover:underline">Reply</span>
+                               <span className="text-xs text-slate-400">{comment.timestamp ? formatDistanceToNow(comment.timestamp.toDate()) : 'Just now'}</span>
                             </div>
                         </div>
                       </div>
                   ))}
                 </div>
+
+                {/* Comment Input Area */}
                 <div className="flex gap-2 items-start pt-1">
                   <Avatar className="w-8 h-8 mt-1"><AvatarImage src={userProfile?.photoURL || user?.photoURL || ''} /><AvatarFallback>ME</AvatarFallback></Avatar>
-                  <form onSubmit={handleComment} className="flex-1 relative bg-[#F0F2F5] rounded-2xl flex items-center transition-all focus-within:ring-1 focus-within:ring-slate-300">
-                      <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Write a comment..." className="bg-transparent border-none focus:ring-0 w-full px-3 py-2 text-[15px] text-slate-900 rounded-2xl" />
-                      <div className="flex items-center gap-2 pr-3 text-slate-500">
-                        <button type="submit" disabled={!commentText.trim()} className="p-1 rounded-full text-synapse-600 hover:bg-slate-200 disabled:text-transparent"><Send className="w-4 h-4" /></button>
+                  <form onSubmit={handleComment} className="flex-1 relative">
+                      <div className="relative bg-[#F0F2F5] rounded-2xl flex items-center transition-all focus-within:ring-1 focus-within:ring-slate-300">
+                        <input 
+                           value={commentText} 
+                           onChange={(e) => setCommentText(e.target.value)} 
+                           placeholder="Write a comment..." 
+                           className="bg-transparent border-none focus:ring-0 w-full px-3 py-2 text-[15px] text-slate-900 rounded-2xl" 
+                           disabled={isPostingComment}
+                        />
+                        <div className="flex items-center gap-1 pr-2">
+                           <input type="file" ref={commentInputRef} onChange={handleCommentFileSelect} className="hidden" accept="image/*" />
+                           <button type="button" onClick={() => commentInputRef.current?.click()} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-500">
+                              <Camera className="w-4 h-4" />
+                           </button>
+                           <button type="submit" disabled={(!commentText.trim() && !commentImage) || isPostingComment} className="p-1.5 rounded-full text-synapse-600 hover:bg-slate-200 disabled:text-transparent">
+                              {isPostingComment ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                           </button>
+                        </div>
                       </div>
+                      
+                      {/* Image Preview in Comment Box */}
+                      {commentImagePreview && (
+                         <div className="mt-2 relative inline-block">
+                            <img src={commentImagePreview} className="h-20 w-auto rounded-lg border border-slate-200" />
+                            <button 
+                               type="button"
+                               onClick={() => { setCommentImage(null); setCommentImagePreview(null); }}
+                               className="absolute -top-1 -right-1 bg-slate-100 rounded-full p-0.5 border border-slate-300 shadow-sm"
+                            >
+                               <X className="w-3 h-3" />
+                            </button>
+                         </div>
+                      )}
                   </form>
                 </div>
             </div>

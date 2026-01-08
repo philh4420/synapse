@@ -1,4 +1,6 @@
 
+export type ReactionType = 'like' | 'love' | 'care' | 'haha' | 'wow' | 'sad' | 'angry';
+
 export interface UserProfile {
   uid: string;
   email: string | null;
@@ -34,20 +36,33 @@ export interface Post {
   };
   content: string;
   timestamp: Date;
-  likes: number;
+  likes: number; // Legacy count
   comments: number;
   shares: number;
   image?: string; // Legacy support
   images?: string[]; // Multiple images
-  likedByUsers: string[];
+  likedByUsers: string[]; // Legacy array
   
   // New Features
+  reactions?: Record<string, ReactionType>; // Map of UID -> Reaction
   privacy?: 'public' | 'friends' | 'only_me'; // Privacy setting
   background?: string; // CSS gradient class
   feeling?: string; // e.g., "😊 feeling happy"
   location?: string; // e.g., "at New York City"
   taggedUsers?: string[]; // Array of display names
   gif?: string; // GIF URL
+}
+
+export interface Comment {
+  id: string;
+  text: string;
+  image?: string; // Image in comment
+  author: {
+    uid: string;
+    name: string;
+    avatar: string;
+  };
+  timestamp: any;
 }
 
 export interface Story {
