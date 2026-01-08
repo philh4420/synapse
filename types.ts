@@ -1,3 +1,4 @@
+
 export interface UserProfile {
   uid: string;
   email: string | null;
@@ -11,11 +12,16 @@ export interface UserProfile {
   birthDate?: string; // ISO Date string YYYY-MM-DD
   
   // Extended Details
-  work?: string;
-  education?: string;
-  location?: string;
-  relationshipStatus?: 'Single' | 'In a relationship' | 'Married' | 'Complicated';
+  work?: string; // Company
+  position?: string; // Job Title
+  education?: string; // College/University
+  highSchool?: string;
+  location?: string; // Current City
+  hometown?: string;
+  relationshipStatus?: 'Single' | 'In a relationship' | 'Married' | 'Complicated' | 'Divorced' | 'Widowed';
   website?: string;
+  gender?: string;
+  languages?: string;
 }
 
 export interface Post {

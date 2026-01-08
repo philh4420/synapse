@@ -8,7 +8,7 @@ import { db } from '../firebaseConfig';
 import { 
   MapPin, Link as LinkIcon, Edit3, Loader2, 
   Briefcase, GraduationCap, Heart, Camera, MoreHorizontal, 
-  Plus, Search, Grid, Home, Phone, Globe, Calendar, User
+  Plus, Search, Grid, Home, Phone, Globe, Calendar, User, Languages
 } from 'lucide-react';
 import { EditProfileDialog } from './EditProfileDialog';
 import { Button } from './ui/Button';
@@ -66,9 +66,6 @@ export const Profile: React.FC = () => {
       }
       
       try {
-        // Firestore 'in' query supports up to 10 items (or 30 depending on version). 
-        // For production, this would need batching or a separate 'friendships' collection.
-        // We slice to 10 for safety in this demo context.
         const friendIds = userProfile.following.slice(0, 10);
         if (friendIds.length === 0) return;
 
@@ -125,8 +122,15 @@ export const Profile: React.FC = () => {
 
             {userProfile.location && (
               <div className="flex items-center gap-3 text-slate-600">
-                <MapPin className="w-5 h-5 text-slate-400" />
+                <Home className="w-5 h-5 text-slate-400" />
                 <span>Lives in <strong className="text-slate-900">{userProfile.location}</strong></span>
+              </div>
+            )}
+            
+            {userProfile.hometown && (
+              <div className="flex items-center gap-3 text-slate-600">
+                <MapPin className="w-5 h-5 text-slate-400" />
+                <span>From <strong className="text-slate-900">{userProfile.hometown}</strong></span>
               </div>
             )}
 
@@ -258,8 +262,6 @@ export const Profile: React.FC = () => {
       { name: 'Places lived', icon: null },
       { name: 'Contact and basic info', icon: null },
       { name: 'Family and relationships', icon: null },
-      { name: 'Details about you', icon: null },
-      { name: 'Life events', icon: null },
     ];
 
     const renderAboutContent = () => {
@@ -281,28 +283,27 @@ export const Profile: React.FC = () => {
          </div>
       );
 
-      const EmptyState = ({ label }: {label: string}) => (
+      const EmptyState = ({ label, icon: Icon }: {label: string, icon?: any}) => (
         <div className="flex items-center gap-3 text-synapse-600 cursor-pointer hover:underline mb-4" onClick={() => setIsEditProfileOpen(true)}>
-           <Plus className="w-6 h-6 border-2 border-synapse-600 rounded-full p-0.5" />
+           {Icon ? <Icon className="w-6 h-6 text-synapse-600" /> : <Plus className="w-6 h-6 border-2 border-synapse-600 rounded-full p-0.5" />}
            <span className="font-medium text-[15px]">Add {label}</span>
         </div>
       );
 
       switch (subTab) {
         case 'Overview':
-        case 'Work and education':
           return (
             <div className="space-y-2">
-              <h4 className="text-[17px] font-bold text-slate-900 mb-4">{subTab === 'Overview' ? 'Overview' : 'Work and Education'}</h4>
+              <h4 className="text-[17px] font-bold text-slate-900 mb-4">Overview</h4>
               
-              {userProfile.work ? (
-                <InfoItem icon={Briefcase} text={`Works at ${userProfile.work}`} action />
+              {userProfile.work || userProfile.position ? (
+                 <InfoItem icon={Briefcase} text={`${userProfile.position || 'Employee'} at ${userProfile.work || 'Company'}`} action />
               ) : (
-                <EmptyState label="a workplace" />
+                 <EmptyState label="a workplace" />
               )}
               
-              {userProfile.education ? (
-                <InfoItem icon={GraduationCap} text={`Studied at ${userProfile.education}`} action />
+              {userProfile.education || userProfile.highSchool ? (
+                <InfoItem icon={GraduationCap} text={`Studied at ${userProfile.education || userProfile.highSchool}`} action />
               ) : (
                 <EmptyState label="a high school or college" />
               )}
@@ -310,6 +311,39 @@ export const Profile: React.FC = () => {
               {userProfile.location && (
                 <InfoItem icon={Home} text={`Lives in ${userProfile.location}`} action />
               )}
+              
+              {userProfile.hometown && (
+                 <InfoItem icon={MapPin} text={`From ${userProfile.hometown}`} action />
+              )}
+              
+              {userProfile.relationshipStatus !== 'Single' && userProfile.relationshipStatus && (
+                 <InfoItem icon={Heart} text={userProfile.relationshipStatus} action />
+              )}
+            </div>
+          );
+        case 'Work and education':
+          return (
+            <div className="space-y-2">
+               <h4 className="text-[17px] font-bold text-slate-900 mb-4">Work</h4>
+               {userProfile.work ? (
+                 <InfoItem icon={Briefcase} text={userProfile.work} subtext={userProfile.position} action />
+               ) : (
+                 <EmptyState label="a workplace" />
+               )}
+
+               <h4 className="text-[17px] font-bold text-slate-900 mb-4 mt-6">University</h4>
+               {userProfile.education ? (
+                  <InfoItem icon={GraduationCap} text={userProfile.education} action />
+               ) : (
+                  <EmptyState label="a university" />
+               )}
+
+               <h4 className="text-[17px] font-bold text-slate-900 mb-4 mt-6">High School</h4>
+               {userProfile.highSchool ? (
+                  <InfoItem icon={GraduationCap} text={userProfile.highSchool} action />
+               ) : (
+                  <EmptyState label="a high school" />
+               )}
             </div>
           );
         case 'Places lived':
@@ -317,9 +351,14 @@ export const Profile: React.FC = () => {
              <div>
                 <h4 className="text-[17px] font-bold text-slate-900 mb-4">Places Lived</h4>
                 {userProfile.location ? (
-                  <InfoItem icon={MapPin} text={userProfile.location} subtext="Current City" action />
+                  <InfoItem icon={Home} text={userProfile.location} subtext="Current City" action />
                 ) : (
                   <EmptyState label="current city" />
+                )}
+                {userProfile.hometown ? (
+                   <InfoItem icon={MapPin} text={userProfile.hometown} subtext="Hometown" action />
+                ) : (
+                   <EmptyState label="hometown" />
                 )}
              </div>
            );
@@ -329,23 +368,35 @@ export const Profile: React.FC = () => {
                 <h4 className="text-[17px] font-bold text-slate-900 mb-4">Contact Info</h4>
                 <InfoItem icon={Phone} text={user.email} subtext="Email" />
                 
-                {userProfile.website && (
+                {userProfile.website ? (
                    <InfoItem icon={Globe} text={userProfile.website} subtext="Website" action />
+                ) : (
+                   <EmptyState label="a website" />
                 )}
 
                 <h4 className="text-[17px] font-bold text-slate-900 mb-4 mt-8">Basic Info</h4>
-                <InfoItem icon={User} text={userProfile.displayName} subtext="Name" action />
-                {userProfile.birthDate && (
+                <InfoItem icon={User} text={userProfile.gender || 'Not specified'} subtext="Gender" action />
+                {userProfile.birthDate ? (
                   <InfoItem icon={Calendar} text={userProfile.birthDate} subtext="Birth Date" action />
+                ) : (
+                  <EmptyState label="birth date" />
+                )}
+                {userProfile.languages ? (
+                   <InfoItem icon={Languages} text={userProfile.languages} subtext="Languages" action />
+                ) : (
+                   <EmptyState label="languages" />
                 )}
              </div>
            );
+        case 'Family and relationships':
+           return (
+             <div>
+                <h4 className="text-[17px] font-bold text-slate-900 mb-4">Relationship</h4>
+                <InfoItem icon={Heart} text={userProfile.relationshipStatus || 'Single'} action />
+             </div>
+           );
         default:
-          return (
-            <div className="text-slate-500 italic py-10">
-              Details for {subTab} are editable via the "Edit Profile" button.
-            </div>
-          );
+          return null;
       }
     };
 
