@@ -1,10 +1,12 @@
+
 import React, { useState, useRef } from 'react';
 import { 
   Dialog, 
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogFooter
+  DialogFooter,
+  DialogDescription
 } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -119,6 +121,9 @@ export const EditProfileDialog: React.FC<EditProfileDialogProps> = ({ open, onOp
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0 overflow-hidden rounded-xl">
         <DialogHeader className="p-4 border-b border-slate-100 flex-shrink-0">
           <DialogTitle className="text-xl font-bold text-center">Edit Profile</DialogTitle>
+          <DialogDescription className="sr-only">
+             Update your public profile details, profile picture, cover photo, and personal information.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-1 overflow-hidden">

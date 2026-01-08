@@ -42,7 +42,8 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetClose
+  SheetClose,
+  SheetDescription
 } from './ui/Sheet';
 
 interface HeaderProps {
@@ -334,6 +335,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <SheetContent side="right">
               <SheetHeader>
                 <SheetTitle>Menu</SheetTitle>
+                <SheetDescription className="sr-only">
+                   Navigation menu for mobile devices.
+                </SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-2 mt-6">
                 <div 

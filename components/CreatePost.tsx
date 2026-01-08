@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Image, Video, Smile, X, Loader2, Globe, MapPin, UserPlus, ChevronDown, 
@@ -15,7 +16,8 @@ import {
   DialogTitle, 
   DialogFooter,
   DialogTrigger,
-  DialogClose
+  DialogClose,
+  DialogDescription
 } from './ui/Dialog';
 import {
   DropdownMenu,
@@ -305,6 +307,9 @@ export const CreatePost: React.FC = () => {
                  subModal === 'location' ? 'Check in' :
                  subModal === 'tag' ? 'Tag people' : 'Choose a GIF'}
               </DialogTitle>
+              <DialogDescription className="sr-only">
+                Create a new post to share thoughts, photos, videos, or feelings with your friends on Synapse.
+              </DialogDescription>
             </DialogHeader>
             
             {/* --- Main Create Post View --- */}

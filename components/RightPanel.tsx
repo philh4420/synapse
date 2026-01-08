@@ -18,7 +18,8 @@ import {
   SheetTitle,
   SheetTrigger,
   SheetFooter,
-  SheetClose
+  SheetClose,
+  SheetDescription
 } from './ui/Sheet';
 
 export const RightPanel: React.FC = () => {
@@ -154,6 +155,9 @@ export const RightPanel: React.FC = () => {
               <SheetContent side="right">
                 <SheetHeader>
                   <SheetTitle>Create Sponsored Ad</SheetTitle>
+                  <SheetDescription className="text-sm text-slate-500">
+                    Fill out the form below to create a new sponsored advertisement visible to users.
+                  </SheetDescription>
                 </SheetHeader>
                 <div className="space-y-4 py-6">
                   <Input 
