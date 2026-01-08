@@ -339,6 +339,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
       }
     } catch (e) {
       console.error("Error liking comment", e);
+      toast("Failed to like comment", "error");
     }
   };
 

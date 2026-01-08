@@ -5,6 +5,7 @@ import { collection, query, limit, getDocs, addDoc, deleteDoc, doc, onSnapshot, 
 import { db } from '../firebaseConfig';
 import { UserProfile, SponsoredAd } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/Avatar';
 import { Skeleton } from './ui/Skeleton';
 import { Button } from './ui/Button';
@@ -24,6 +25,7 @@ import {
 
 export const RightPanel: React.FC = () => {
   const { user, userProfile } = useAuth();
+  const { toast } = useToast();
   
   // State
   const [contacts, setContacts] = useState<UserProfile[]>([]);
@@ -123,8 +125,10 @@ export const RightPanel: React.FC = () => {
       setNewAdSite('');
       setNewAdLink('');
       setAdImageFile(null);
+      toast("Ad created successfully", "success");
     } catch (error) {
       console.error("Failed to create ad:", error);
+      toast("Failed to create ad", "error");
     } finally {
       setIsCreatingAd(false);
     }
@@ -132,7 +136,12 @@ export const RightPanel: React.FC = () => {
 
   const handleDeleteAd = async (adId: string) => {
     if (confirm("Are you sure you want to remove this ad?")) {
-      await deleteDoc(doc(db, 'ads', adId));
+      try {
+        await deleteDoc(doc(db, 'ads', adId));
+        toast("Ad removed", "info");
+      } catch (error) {
+        toast("Failed to remove ad", "error");
+      }
     }
   };
 

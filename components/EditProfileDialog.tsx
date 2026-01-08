@@ -11,6 +11,7 @@ import {
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { uploadToCloudinary } from '../utils/upload';
@@ -28,6 +29,7 @@ type TabKey = 'images' | 'bio' | 'work_edu' | 'places' | 'contact_basic' | 'rela
 
 export const EditProfileDialog: React.FC<EditProfileDialogProps> = ({ open, onOpenChange }) => {
   const { user, userProfile, refreshProfile } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('images');
   
@@ -99,9 +101,11 @@ export const EditProfileDialog: React.FC<EditProfileDialogProps> = ({ open, onOp
 
       await updateDoc(doc(db, 'users', user.uid), updates);
       await refreshProfile();
+      toast("Profile updated successfully", "success");
       onOpenChange(false);
     } catch (error) {
       console.error("Error updating profile:", error);
+      toast("Failed to update profile", "error");
     } finally {
       setLoading(false);
     }

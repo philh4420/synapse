@@ -5,6 +5,7 @@ import {
   Type, Search, ArrowLeft, MoreHorizontal, Gift, Navigation, Users, Lock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/Avatar';
@@ -54,6 +55,7 @@ const FEELINGS = [
 
 export const CreatePost: React.FC = () => {
   const { user, userProfile } = useAuth();
+  const { toast } = useToast();
   
   // Content State
   const [content, setContent] = useState('');
@@ -114,7 +116,7 @@ export const CreatePost: React.FC = () => {
 
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      toast("Geolocation is not supported by your browser", "error");
       return;
     }
     setIsLocating(true);
@@ -134,13 +136,14 @@ export const CreatePost: React.FC = () => {
         }
       } catch (error) {
         console.error("Error getting location details:", error);
+        toast("Could not retrieve location details.", "error");
       } finally {
         setIsLocating(false);
       }
     }, (error) => {
       console.error("Geo error:", error);
       setIsLocating(false);
-      alert("Could not retrieve location.");
+      toast("Could not retrieve location.", "error");
     });
   };
 
@@ -251,8 +254,10 @@ export const CreatePost: React.FC = () => {
       setTaggedUsers([]);
       setPrivacy('public');
       setIsOpen(false);
+      toast("Post created successfully!", "success");
     } catch (error) {
       console.error("Failed to create post:", error);
+      toast("Failed to create post.", "error");
     } finally {
       setIsUploading(false);
     }
