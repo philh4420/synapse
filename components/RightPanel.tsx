@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Search, MoreHorizontal, Video, Gift, Plus, ExternalLink, Trash2 } from 'lucide-react';
+import { Search, MoreHorizontal, Video, Gift, Plus, ExternalLink, Trash2, Cake, ArrowRight } from 'lucide-react';
 import { collection, query, limit, getDocs, addDoc, deleteDoc, doc, onSnapshot, where, documentId } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { UserProfile, SponsoredAd } from '../types';
@@ -149,9 +149,9 @@ export const RightPanel: React.FC = () => {
     <div className="hidden lg:flex flex-col w-[280px] xl:w-[360px] h-[calc(100vh-90px)] fixed right-0 top-[5.5rem] pt-4 pr-2 pb-4 hover:overflow-y-auto hide-scrollbar">
       
       {/* --- Sponsored Section --- */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2 px-2">
-          <h3 className="font-semibold text-slate-500 text-[17px]">Sponsored</h3>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3 px-2">
+          <h3 className="font-bold text-slate-500 text-[15px] tracking-wide uppercase">Sponsored</h3>
           
           {/* Admin Create Ad Button */}
           {userProfile?.role === 'admin' && (
@@ -208,18 +208,25 @@ export const RightPanel: React.FC = () => {
 
         <ul className="space-y-4">
           {ads.map((ad) => (
-            <li key={ad.id} className="relative flex items-center gap-3 p-2 hover:bg-black/5 rounded-lg cursor-pointer transition-colors group">
-              <a href={ad.link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 w-full">
-                <img 
-                  src={ad.image} 
-                  alt={ad.title} 
-                  className="w-32 h-32 object-cover rounded-lg border border-slate-100 bg-slate-100"
-                />
-                <div className="flex flex-col justify-center min-w-0">
-                  <span className="font-semibold text-slate-900 text-[15px] leading-tight truncate pr-2">{ad.title}</span>
-                  <span className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    {ad.site} <ExternalLink className="w-3 h-3" />
-                  </span>
+            <li key={ad.id} className="group relative">
+              <a href={ad.link} target="_blank" rel="noopener noreferrer" className="block relative rounded-2xl overflow-hidden bg-white shadow-sm border border-slate-100 hover:shadow-md transition-all group-hover:-translate-y-1">
+                <div className="aspect-[1.91/1] overflow-hidden">
+                    <img 
+                      src={ad.image} 
+                      alt={ad.title} 
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-3 right-3 text-white text-xs font-bold bg-white/20 backdrop-blur-md px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                       Visit <ArrowRight className="w-3 h-3" />
+                    </div>
+                </div>
+                <div className="p-3">
+                    <div className="flex justify-between items-start">
+                       <h4 className="font-bold text-slate-900 leading-tight pr-4">{ad.title}</h4>
+                       <ExternalLink className="w-3 h-3 text-slate-400 mt-1 flex-shrink-0" />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1 font-medium">{ad.site}</p>
                 </div>
               </a>
               
@@ -227,7 +234,7 @@ export const RightPanel: React.FC = () => {
               {userProfile?.role === 'admin' && (
                 <button 
                   onClick={(e) => { e.preventDefault(); handleDeleteAd(ad.id); }}
-                  className="absolute top-2 right-2 p-1.5 bg-white/80 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all"
+                  className="absolute -top-2 -right-2 p-1.5 bg-white text-red-500 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-all z-10 hover:bg-red-50"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -236,80 +243,86 @@ export const RightPanel: React.FC = () => {
           ))}
           
           {ads.length === 0 && (
-            <div className="px-2 py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <div className="px-4 py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
                <p className="text-sm text-slate-400 font-medium">No active ads</p>
-               {userProfile?.role === 'admin' && <p className="text-xs text-synapse-500 mt-1">Click + to add one</p>}
+               {userProfile?.role === 'admin' && <p className="text-xs text-synapse-500 mt-1 cursor-pointer hover:underline">Click + to add one</p>}
             </div>
           )}
         </ul>
       </div>
 
-      <Separator className="my-2 bg-slate-300/50" />
+      <Separator className="my-2 bg-slate-200/60" />
 
       {/* --- Birthdays Section --- */}
       {birthdayUsers.length > 0 && (
-        <>
-          <div className="mb-4 p-2">
-            <h3 className="font-semibold text-slate-500 text-[17px] mb-2">Birthdays</h3>
-            <div className="flex items-start gap-3 hover:bg-black/5 p-2 rounded-lg cursor-pointer transition-colors -ml-2">
-              <Gift className="w-8 h-8 text-blue-500 mt-1 flex-shrink-0" />
-              <p className="text-[15px] text-slate-900 leading-tight pt-1">
-                <span className="font-semibold">{birthdayUsers[0].displayName}</span>
-                {birthdayUsers.length > 1 && (
-                  <span> and <span className="font-semibold">{birthdayUsers.length - 1} others</span></span>
-                )}
-                {' '}have birthdays today.
-              </p>
+        <div className="my-4">
+            <h3 className="font-bold text-slate-500 text-[15px] tracking-wide uppercase mb-3 px-2">Events</h3>
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 p-4 text-white shadow-md shadow-blue-200 transform transition-transform hover:scale-[1.02] cursor-pointer group">
+                <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-white/20 rounded-full blur-xl" />
+                <div className="absolute bottom-0 left-0 -mb-2 -ml-2 w-16 h-16 bg-black/10 rounded-full blur-xl" />
+                
+                <div className="relative z-10 flex items-start gap-3">
+                   <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                      <Cake className="w-6 h-6 text-white" />
+                   </div>
+                   <div className="flex-1">
+                      <p className="font-bold text-lg leading-tight">It's {birthdayUsers[0].displayName.split(' ')[0]}'s Birthday!</p>
+                      <p className="text-blue-50 text-sm mt-1 font-medium group-hover:text-white transition-colors">
+                        {birthdayUsers.length > 1 ? `And ${birthdayUsers.length - 1} others have birthdays today.` : 'Wish them a great day.'}
+                      </p>
+                   </div>
+                </div>
             </div>
-          </div>
-          <Separator className="my-2 bg-slate-300/50" />
-        </>
+        </div>
       )}
 
       {/* --- Contacts Section --- */}
-      <div className="flex-1">
+      <div className="flex-1 flex flex-col mt-2">
         <div className="flex justify-between items-center mb-2 px-2">
-          <h3 className="font-semibold text-slate-500 text-[17px]">Contacts</h3>
-          <div className="flex gap-1 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity">
-             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200">
+          <h3 className="font-bold text-slate-500 text-[15px] tracking-wide uppercase">Contacts</h3>
+          <div className="flex gap-1 text-slate-400 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity">
+             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-slate-100">
                <Video className="w-4 h-4" />
              </Button>
-             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200">
+             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-slate-100">
                <Search className="w-4 h-4" />
              </Button>
-             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200">
+             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-slate-100">
                <MoreHorizontal className="w-4 h-4" />
              </Button>
           </div>
         </div>
         
         {/* Contact List */}
-        <div className="space-y-0.5 pb-10">
+        <div className="space-y-1 pb-10 flex-1 overflow-y-auto pr-1">
           {loadingContacts ? (
              // Skeleton loading state
              [...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-3 p-2 rounded-lg">
-                   <Skeleton className="h-9 w-9 rounded-full" />
+                <div key={i} className="flex items-center gap-3 p-2 rounded-xl">
+                   <Skeleton className="h-10 w-10 rounded-full" />
                    <Skeleton className="h-4 w-24" />
                 </div>
              ))
           ) : contacts.length > 0 ? (
             contacts.map((u) => (
-              <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-black/5 rounded-lg cursor-pointer transition-colors group relative">
+              <div key={u.uid} className="flex items-center gap-3 p-2 hover:bg-white hover:shadow-sm hover:ring-1 hover:ring-slate-100 rounded-xl cursor-pointer transition-all group relative">
                 <div className="relative">
-                  <Avatar className="h-9 w-9 border border-slate-200/50">
+                  <Avatar className="h-9 w-9 border border-slate-200/50 shadow-sm">
                      <AvatarImage src={u.photoURL || `https://ui-avatars.com/api/?name=${u.displayName}`} />
                      <AvatarFallback>{u.displayName?.substring(0,2).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  {/* Online Indicator (Mocked as mostly always green for demo feeling) */}
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                  {/* Online Indicator with Pulse */}
+                  <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                  </span>
                 </div>
-                <span className="font-medium text-slate-900 text-[15px] truncate">{u.displayName}</span>
+                <span className="font-semibold text-slate-700 text-[14px] truncate group-hover:text-slate-900">{u.displayName}</span>
               </div>
             ))
           ) : (
-            <div className="px-2 text-sm text-slate-500 italic mt-2">
-               {userProfile?.friends?.length === 0 ? "Add friends to see contacts" : "No contacts available"}
+            <div className="px-4 py-8 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 mt-2">
+               <p className="text-sm text-slate-500">No contacts available</p>
+               <p className="text-xs text-slate-400 mt-1">Add friends to chat</p>
             </div>
           )}
         </div>
