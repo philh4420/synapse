@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { Page } from '../types';
 import { uploadToCloudinary } from '../utils/upload';
@@ -25,7 +25,7 @@ import {
 import { cn } from '../lib/utils';
 
 export const Pages: React.FC = () => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const { toast } = useToast();
   
   const [allPages, setAllPages] = useState<Page[]>([]);
@@ -93,7 +93,7 @@ export const Pages: React.FC = () => {
       if (coverFile) coverURL = await uploadToCloudinary(coverFile);
       if (avatarFile) photoURL = await uploadToCloudinary(avatarFile);
 
-      await addDoc(collection(db, 'pages'), {
+      const docRef = await addDoc(collection(db, 'pages'), {
         name: newPageData.name,
         handle: `@${newPageData.name.toLowerCase().replace(/\s+/g, '')}`,
         category: newPageData.category,
@@ -105,6 +105,35 @@ export const Pages: React.FC = () => {
         verified: false,
         timestamp: serverTimestamp()
       });
+
+      // Notify friends about the new page
+      if (userProfile?.friends && userProfile.friends.length > 0) {
+         const batch = writeBatch(db);
+         // Process in chunks of 20 to avoid overwhelming write/read ops in this demo
+         // (Real app would use a cloud function)
+         const friendsToNotify = userProfile.friends.slice(0, 20);
+         
+         friendsToNotify.forEach(friendId => {
+            if (typeof friendId === 'string') {
+               const notifRef = doc(collection(db, 'notifications'));
+               batch.set(notifRef, {
+                  recipientUid: friendId,
+                  sender: {
+                     uid: user.uid,
+                     displayName: userProfile.displayName || 'Friend',
+                     photoURL: userProfile.photoURL || ''
+                  },
+                  type: 'page_invite',
+                  pageId: docRef.id,
+                  previewText: newPageData.name,
+                  read: false,
+                  timestamp: serverTimestamp()
+               });
+            }
+         });
+         
+         await batch.commit();
+      }
 
       toast("Page created successfully!", "success");
       setIsCreating(false);

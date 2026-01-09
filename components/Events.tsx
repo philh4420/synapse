@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, arrayUnion, arrayRemove, where, writeBatch } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { Event } from '../types';
 import { uploadToCloudinary } from '../utils/upload';
@@ -95,7 +95,7 @@ export const Events: React.FC = () => {
         coverURL = fallbacks[newEvent.category] || fallbacks['Social'];
       }
 
-      await addDoc(collection(db, 'events'), {
+      const docRef = await addDoc(collection(db, 'events'), {
         ...newEvent,
         coverURL,
         host: {
@@ -107,6 +107,33 @@ export const Events: React.FC = () => {
         interested: [],
         timestamp: serverTimestamp()
       });
+
+      // Notify friends about the new event
+      if (userProfile?.friends && userProfile.friends.length > 0) {
+         const batch = writeBatch(db);
+         const friendsToNotify = userProfile.friends.slice(0, 20); // Limit batch ops
+         
+         friendsToNotify.forEach(friendId => {
+            if (typeof friendId === 'string') {
+               const notifRef = doc(collection(db, 'notifications'));
+               batch.set(notifRef, {
+                  recipientUid: friendId,
+                  sender: {
+                     uid: user.uid,
+                     displayName: userProfile.displayName || 'Friend',
+                     photoURL: userProfile.photoURL || ''
+                  },
+                  type: 'event_invite',
+                  eventId: docRef.id,
+                  previewText: newEvent.title,
+                  read: false,
+                  timestamp: serverTimestamp()
+               });
+            }
+         });
+         
+         await batch.commit();
+      }
 
       toast("Event created successfully!", "success");
       setIsCreating(false);

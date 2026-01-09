@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Home, Users, LayoutGrid, MessageCircle, Bell, ChevronDown, 
   Activity, Shield, Store, MonitorPlay, X, LogOut, Settings, HelpCircle, 
-  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, UserPlus
+  Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, UserPlus,
+  Globe, Ticket
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, limit, onSnapshot, orderBy, updateDoc, doc, getDocs } from 'firebase/firestore';
@@ -177,6 +178,16 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
         message = 'accepted your friend request';
         targetTab = 'profile'; 
         icon = <div className="absolute -bottom-1 -right-1 bg-green-600 rounded-full p-1 border-2 border-white"><Activity className="w-3 h-3 text-white fill-current" /></div>;
+        break;
+      case 'page_invite':
+        message = 'invited you to like their new page';
+        targetTab = 'pages';
+        icon = <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1 border-2 border-white"><Flag className="w-3 h-3 text-white fill-current" /></div>;
+        break;
+      case 'event_invite':
+        message = 'hosted a new event';
+        targetTab = 'events';
+        icon = <div className="absolute -bottom-1 -right-1 bg-rose-500 rounded-full p-1 border-2 border-white"><Ticket className="w-3 h-3 text-white fill-current" /></div>;
         break;
       default:
         message = 'interacted with your content';

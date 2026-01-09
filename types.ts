@@ -161,9 +161,11 @@ export interface Notification {
     displayName: string;
     photoURL: string;
   };
-  type: 'like' | 'comment' | 'follow' | 'friend_request' | 'friend_accept';
+  type: 'like' | 'comment' | 'follow' | 'friend_request' | 'friend_accept' | 'page_invite' | 'event_invite';
   postId?: string; // ID of the post interacted with
-  previewText?: string; // Snippet of comment or post
+  pageId?: string; // ID of page created
+  eventId?: string; // ID of event created
+  previewText?: string; // Snippet of comment, post, page name, or event name
   read: boolean;
   timestamp: any;
 }
