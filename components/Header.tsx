@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Home, Users, LayoutGrid, MessageCircle, Bell, ChevronDown, 
-  Activity, Shield, Store, MonitorPlay, X, LogOut, Settings, HelpCircle, 
+  Activity, Shield, MonitorPlay, X, LogOut, Settings, HelpCircle, 
   Moon, MessageSquare, PlusCircle, PenTool, Flag, Star, MoreHorizontal, Menu, UserPlus,
-  Globe, Ticket
+  Ticket
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, limit, onSnapshot, orderBy, updateDoc, doc, getDocs } from 'firebase/firestore';
@@ -69,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     { id: 'feed', icon: Home, label: 'Home' },
     { id: 'friends', icon: Users, label: 'Friends' }, 
     { id: 'videos', icon: MonitorPlay, label: 'Watch' },
-    { id: 'marketplace', icon: Store, label: 'Marketplace' },
+    // Marketplace removed
   ];
 
   if (userProfile?.role === 'admin') {
@@ -557,10 +557,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                             </div>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-64">
-                            <DropdownMenuItem onClick={() => setActiveTab('settings')} className="py-2">Settings</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Privacy Checkup</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Privacy Center</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Activity Log</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setActiveTab('settings')} className="py-2 cursor-pointer font-medium">Settings</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Privacy Checkup</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Privacy Center</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Activity Log</DropdownMenuItem>
                         </DropdownMenuSubContent>
                     </DropdownMenuSub>
 
@@ -574,9 +574,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                             </div>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-64">
-                            <DropdownMenuItem className="py-2">Help Center</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Support Inbox</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Report a problem</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Help Center</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Support Inbox</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Report a problem</DropdownMenuItem>
                         </DropdownMenuSubContent>
                     </DropdownMenuSub>
 
@@ -590,9 +590,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                             </div>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-64">
-                            <DropdownMenuItem className="py-2">Dark Mode</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Compact Mode</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2">Keyboard</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Dark Mode</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Compact Mode</DropdownMenuItem>
+                            <DropdownMenuItem className="py-2 cursor-pointer">Keyboard</DropdownMenuItem>
                         </DropdownMenuSubContent>
                     </DropdownMenuSub>
                 </DropdownMenuGroup>

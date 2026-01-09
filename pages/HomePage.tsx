@@ -1,8 +1,4 @@
 
-
-
-
-
 import React, { useState } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { Feed } from '../components/Feed';
@@ -127,7 +123,7 @@ export const HomePage: React.FC = () => {
               <X />
             </button>
             <div className="space-y-4">
-              {['Feed', 'Friends', 'Pages', 'Events', 'Watch', 'Marketplace', 'Groups', 'Profile'].map((item) => (
+              {['Feed', 'Friends', 'Pages', 'Events', 'Watch', 'Groups', 'Profile'].map((item) => (
                 <button 
                   key={item}
                   onClick={() => { handleTabChange(item.toLowerCase() === 'watch' ? 'videos' : item.toLowerCase()); setMobileMenuOpen(false); }}
