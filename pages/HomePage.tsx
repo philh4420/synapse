@@ -7,6 +7,7 @@ import { AdminPanel } from '../components/AdminPanel';
 import { Profile } from '../components/Profile';
 import { FriendsPage } from '../components/FriendsPage';
 import { MemoriesPage } from '../components/MemoriesPage';
+import { SavedPage } from '../components/SavedPage';
 import { Header } from '../components/Header';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +43,8 @@ export const HomePage: React.FC = () => {
         return <FriendsPage onViewProfile={handleViewProfile} />;
       case 'memories':
         return <MemoriesPage />;
+      case 'bookmarks':
+        return <SavedPage />;
       case 'admin':
         return <AdminPanel />;
       default:
@@ -61,7 +64,8 @@ export const HomePage: React.FC = () => {
 
   // Wide layout for everything except Feed (which mimics FB's narrow feed)
   // Memories page is somewhat wide but centered, similar to profile
-  const isWidePage = activeTab === 'friends' || activeTab === 'admin' || activeTab === 'profile' || activeTab === 'memories';
+  // Saved page is also centered but potentially wider than feed
+  const isWidePage = activeTab === 'friends' || activeTab === 'admin' || activeTab === 'profile' || activeTab === 'memories' || activeTab === 'bookmarks';
 
   return (
     <div className="min-h-screen bg-[#F0F2F5] relative selection:bg-synapse-200 selection:text-synapse-900">
