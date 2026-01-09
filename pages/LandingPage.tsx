@@ -14,7 +14,9 @@ import {
   getDocs, 
   query, 
   limit,
-  onSnapshot 
+  onSnapshot,
+  getCountFromServer,
+  orderBy
 } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { Button } from '../components/ui/Button';
@@ -38,6 +40,11 @@ export const LandingPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [signupEnabled, setSignupEnabled] = useState(true);
   const [announcement, setAnnouncement] = useState<SiteSettings['announcement']>(undefined);
+  
+  // Real Data Stats
+  const [userCount, setUserCount] = useState(0);
+  const [recentAvatars, setRecentAvatars] = useState<string[]>([]);
+
   const { refreshProfile } = useAuth();
 
   useEffect(() => {
@@ -49,6 +56,41 @@ export const LandingPage: React.FC = () => {
         setAnnouncement(data.announcement);
       }
     });
+
+    // Fetch Real Stats
+    const fetchStats = async () => {
+      try {
+        const usersColl = collection(db, 'users');
+        
+        // Get Count
+        const countSnap = await getCountFromServer(usersColl);
+        setUserCount(countSnap.data().count);
+
+        // Get Recent Avatars
+        // Note: Requires index on 'createdAt' descending for 'users' collection. 
+        // If index is missing, this might fail or require composite index creation in Firebase Console.
+        // Fallback to simple fetch if ordering fails or just fetch without order if dataset is small.
+        const q = query(usersColl, orderBy('createdAt', 'desc'), limit(4));
+        try {
+            const recentSnap = await getDocs(q);
+            const avatars = recentSnap.docs.map(d => d.data().photoURL).filter(url => url);
+            setRecentAvatars(avatars);
+        } catch (err) {
+            console.warn("Could not fetch ordered recent users (index might be missing), fetching any...", err);
+            // Fallback: just get any 4
+            const fallbackQ = query(usersColl, limit(4));
+            const fallbackSnap = await getDocs(fallbackQ);
+            const avatars = fallbackSnap.docs.map(d => d.data().photoURL).filter(url => url);
+            setRecentAvatars(avatars);
+        }
+
+      } catch (e) {
+        console.error("Error fetching landing stats", e);
+      }
+    };
+
+    fetchStats();
+
     return () => unsub();
   }, []);
 
@@ -173,7 +215,9 @@ export const LandingPage: React.FC = () => {
           {/* Social Proof / Stats */}
           <div className="flex items-center gap-8 pt-8 border-t border-white/10">
              <div>
-                <p className="text-3xl font-bold text-white">2.4M+</p>
+                <p className="text-3xl font-bold text-white">
+                  {userCount > 0 ? userCount.toLocaleString() : '0'}
+                </p>
                 <p className="text-sm text-slate-500 uppercase tracking-wider font-semibold">Active Minds</p>
              </div>
              <div className="h-10 w-px bg-white/10" />
@@ -183,11 +227,15 @@ export const LandingPage: React.FC = () => {
              </div>
              <div className="h-10 w-px bg-white/10" />
              <div className="flex -space-x-4">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden">
-                     <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" className="w-full h-full object-cover" />
-                  </div>
-                ))}
+                {recentAvatars.length > 0 ? (
+                  recentAvatars.map((url, i) => (
+                    <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden">
+                       <img src={url} alt="User" className="w-full h-full object-cover" />
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-500 flex items-center h-10">Join them</div>
+                )}
              </div>
           </div>
         </div>
