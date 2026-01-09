@@ -63,6 +63,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   // Notifications State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  
+  // Message Notifications State
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   const navItems = [
     { id: 'feed', icon: Home, label: 'Home' },
@@ -84,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Listen for General Notifications
   useEffect(() => {
     if (!user) return;
 
@@ -103,6 +107,30 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       
       setNotifications(notifs);
       setUnreadCount(notifs.filter(n => !n.read).length);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Listen for Unread Messages
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'chats'),
+      where('participants', 'array-contains', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let count = 0;
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        // Check if last message exists, is NOT read, and I am NOT the sender
+        if (data.lastMessage && !data.lastMessage.read && data.lastMessage.senderId !== user.uid) {
+          count++;
+        }
+      });
+      setUnreadMessageCount(count);
     });
 
     return () => unsubscribe();
@@ -431,13 +459,18 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             variant="ghost" 
             size="icon" 
             className={cn(
-              "rounded-full h-10 w-10 transition-colors",
+              "rounded-full h-10 w-10 transition-colors relative",
               isOpen 
                 ? "bg-synapse-100 text-synapse-600 hover:bg-synapse-200 dark:bg-synapse-900/50 dark:text-synapse-400"
                 : "bg-slate-100/50 hover:bg-synapse-50 dark:bg-slate-800/50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-synapse-600"
             )}
           >
              <MessageCircle className={cn("w-5 h-5", isOpen && "fill-current")} />
+             {unreadMessageCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900 animate-in zoom-in">
+                   {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                </span>
+             )}
           </Button>
 
           {/* Notifications Popover */}
