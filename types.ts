@@ -59,6 +59,7 @@ export interface UserProfile {
   
   // Settings
   settings?: UserSettings;
+  createdAt?: any;
 }
 
 export interface Report {
@@ -70,6 +71,15 @@ export interface Report {
   timestamp: any;
   reporter?: UserProfile; // For UI
   reported?: UserProfile; // For UI
+}
+
+export interface AdminLog {
+  id: string;
+  adminId: string;
+  adminName: string;
+  action: string;
+  target: string;
+  timestamp: any;
 }
 
 export interface Post {
@@ -165,9 +175,11 @@ export interface Event {
     uid: string;
     name: string;
     avatar: string;
+    attendees: string[]; // Array of UIDs
+    interested: string[]; // Array of UIDs
   };
-  attendees: string[]; // Array of UIDs
-  interested: string[]; // Array of UIDs
+  attendees: string[];
+  interested: string[];
   timestamp: any;
 }
 
@@ -179,6 +191,11 @@ export interface NavItem {
 
 export interface SiteSettings {
   signupEnabled: boolean;
+  announcement?: {
+    enabled: boolean;
+    message: string;
+    type: 'info' | 'warning' | 'error';
+  }
 }
 
 export interface Trend {
