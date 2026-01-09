@@ -8,8 +8,10 @@ import { Card } from './ui/Card';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/Avatar';
 import { Button } from './ui/Button';
 import { FriendButton } from './FriendButton';
-import { Users, UserPlus, ChevronRight, Settings, Sparkles, UserSearch } from 'lucide-react';
+import { Users, UserPlus, ChevronRight, Settings, Sparkles, UserSearch, Search, UserCheck } from 'lucide-react';
 import { Separator } from './ui/Separator';
+import { Input } from './ui/Input';
+import { cn } from '../lib/utils';
 
 export const FriendsPage: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -17,7 +19,8 @@ export const FriendsPage: React.FC = () => {
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [suggestions, setSuggestions] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'requests' | 'suggestions' | 'all'>('requests');
+  const [view, setView] = useState<'home' | 'requests' | 'suggestions' | 'all'>('home');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // 1. Listen for Incoming Requests
   useEffect(() => {
@@ -49,7 +52,7 @@ export const FriendsPage: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // 2. Fetch All Friends (Reactive to userProfile changes)
+  // 2. Fetch All Friends
   useEffect(() => {
     const fetchFriends = async () => {
         if (!userProfile?.friends || userProfile.friends.length === 0) {
@@ -59,7 +62,6 @@ export const FriendsPage: React.FC = () => {
         }
         
         try {
-            // Sanitize friends list to remove empty strings or invalid IDs
             const validFriends = userProfile.friends.filter(id => id && typeof id === 'string' && id.trim().length > 0);
             
             if (validFriends.length === 0) {
@@ -68,10 +70,7 @@ export const FriendsPage: React.FC = () => {
                 return;
             }
 
-            // Batch fetch friends (Firestore limits 'in' query to 10-30 items depending on sdk version, usually 10 is safe for 'in')
-            // For a production app, we would paginate this properly.
-            const chunk = validFriends.slice(0, 20);
-            
+            const chunk = validFriends.slice(0, 20); // Limit for demo
             if (chunk.length > 0) {
                 const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
                 const snap = await getDocs(q);
@@ -94,13 +93,17 @@ export const FriendsPage: React.FC = () => {
   // 3. Fetch Suggestions
   useEffect(() => {
     const fetchSuggestions = async () => {
-      if (!user || view !== 'suggestions') return;
+      if (!user) return;
+      // Fetch only if needed or on mount
+      if (suggestions.length > 0 && view !== 'home' && view !== 'suggestions') return;
+
       setLoading(true);
       try {
         const excludeIds = new Set<string>();
         excludeIds.add(user.uid);
         userProfile?.friends?.forEach(id => excludeIds.add(id));
 
+        // Basic exclusion of pending requests
         const qSent = query(collection(db, 'friend_requests'), where('senderId', '==', user.uid));
         const sentSnap = await getDocs(qSent);
         sentSnap.forEach(doc => excludeIds.add(doc.data().receiverId));
@@ -109,7 +112,7 @@ export const FriendsPage: React.FC = () => {
         const recSnap = await getDocs(qReceived);
         recSnap.forEach(doc => excludeIds.add(doc.data().senderId));
 
-        const qUsers = query(collection(db, 'users'), limit(50));
+        const qUsers = query(collection(db, 'users'), limit(30));
         const userSnap = await getDocs(qUsers);
         
         const newSuggestions: UserProfile[] = [];
@@ -128,176 +131,195 @@ export const FriendsPage: React.FC = () => {
     fetchSuggestions();
   }, [user, userProfile, view]);
 
+  // Filter Friends
+  const filteredFriends = friends.filter(f => 
+    f.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const NavItem = ({ id, icon: Icon, label, count }: { id: typeof view, icon: any, label: string, count?: number }) => (
+    <button
+      onClick={() => setView(id)}
+      className={cn(
+        "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-[15px] font-semibold transition-all duration-300 text-left relative overflow-hidden group",
+        view === id 
+          ? "bg-white text-slate-900 shadow-sm ring-1 ring-black/5" 
+          : "text-slate-500 hover:bg-white/60 hover:text-slate-700"
+      )}
+    >
+      <div className={cn(
+        "w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-sm",
+        view === id 
+          ? "bg-synapse-600 text-white" 
+          : "bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600"
+      )}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <span className="flex-1">{label}</span>
+      {count !== undefined && count > 0 && (
+         <span className="text-red-500 font-bold text-sm bg-red-50 px-2 py-0.5 rounded-full mr-2">{count}</span>
+      )}
+      {view === id && <ChevronRight className="w-5 h-5 text-slate-300" />}
+    </button>
+  );
+
   return (
-    <div className="w-full h-full p-2 md:p-6">
-      <div className="flex flex-col md:flex-row gap-6 h-full items-start">
+    <div className="w-full max-w-[1600px] mx-auto p-4 lg:p-6 animate-in fade-in duration-500">
+      <div className="flex flex-col lg:flex-row gap-8 items-start">
          
-         {/* Internal Sidebar */}
-         <div className="w-full md:w-[280px] md:flex-shrink-0 md:sticky md:top-20">
-            <div className="flex items-center justify-between mb-4 px-2">
-                <h1 className="text-2xl font-bold text-slate-900">Friends</h1>
-                <Button variant="ghost" size="icon" className="rounded-full bg-slate-100 hover:bg-slate-200">
-                    <Settings className="w-5 h-5 text-slate-700" />
+         {/* --- Sidebar Navigation --- */}
+         <div className="w-full lg:w-[300px] flex-shrink-0 lg:sticky lg:top-24 space-y-6">
+            <div className="flex items-center justify-between px-2">
+                <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Friends</h1>
+                <Button variant="ghost" size="icon" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600">
+                    <Settings className="w-5 h-5" />
                 </Button>
             </div>
             
-            <div className="space-y-1">
-               <Button 
-                 variant={view === 'requests' ? 'secondary' : 'ghost'}
-                 onClick={() => setView('requests')}
-                 className={`w-full justify-start h-12 gap-3 text-base font-medium px-2 ${view === 'requests' ? 'bg-synapse-100/50 text-synapse-700' : ''}`}
-               >
-                  <div className={`p-2 rounded-full flex items-center justify-center ${view === 'requests' ? 'bg-synapse-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                     <UserPlus className="w-5 h-5" />
-                  </div>
-                  <span className="flex-1 text-left">Friend Requests</span>
-                  {requests.length > 0 && <ChevronRight className="w-5 h-5 text-slate-400" />}
-               </Button>
-
-               <Button 
-                 variant={view === 'suggestions' ? 'secondary' : 'ghost'}
-                 onClick={() => setView('suggestions')}
-                 className={`w-full justify-start h-12 gap-3 text-base font-medium px-2 ${view === 'suggestions' ? 'bg-synapse-100/50 text-synapse-700' : ''}`}
-               >
-                  <div className={`p-2 rounded-full flex items-center justify-center ${view === 'suggestions' ? 'bg-synapse-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                     <UserSearch className="w-5 h-5" />
-                  </div>
-                  <span className="flex-1 text-left">Suggestions</span>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
-               </Button>
-
-               <Button 
-                 variant={view === 'all' ? 'secondary' : 'ghost'}
-                 onClick={() => setView('all')}
-                 className={`w-full justify-start h-12 gap-3 text-base font-medium px-2 ${view === 'all' ? 'bg-synapse-100/50 text-synapse-700' : ''}`}
-               >
-                  <div className={`p-2 rounded-full flex items-center justify-center ${view === 'all' ? 'bg-synapse-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                     <Users className="w-5 h-5" />
-                  </div>
-                  <span className="flex-1 text-left">All Friends</span>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
-               </Button>
+            <div className="space-y-2">
+               <NavItem id="home" icon={UserCheck} label="Home" />
+               <NavItem id="requests" icon={UserPlus} label="Friend Requests" count={requests.length} />
+               <NavItem id="suggestions" icon={UserSearch} label="Suggestions" />
+               <NavItem id="all" icon={Users} label="All Friends" />
             </div>
             
-            <Separator className="my-4" />
+            <Separator className="bg-slate-200/60" />
+
+            {/* Mini Footer for Sidebar */}
+            <div className="px-4 text-xs text-slate-400 leading-relaxed">
+               <p>Friend requests and suggestions are based on mutual connections and profile information.</p>
+            </div>
          </div>
 
-         {/* Content Area - Fluid Grid */}
-         <div className="flex-1 w-full min-w-0">
+         {/* --- Content Area --- */}
+         <div className="flex-1 min-w-0 w-full">
+            
+            {/* HOME VIEW (Aggregated) */}
+            {view === 'home' && (
+               <div className="space-y-10">
+                  {/* Requests Section */}
+                  {requests.length > 0 && (
+                     <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                           <h2 className="text-xl font-bold text-slate-900">Friend Requests <span className="text-red-500 text-lg ml-1">{requests.length}</span></h2>
+                           <Button variant="link" onClick={() => setView('requests')} className="text-synapse-600 font-semibold">See all</Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                           {requests.slice(0, 4).map(req => (
+                               <FriendRequestCard key={req.id} req={req} />
+                           ))}
+                        </div>
+                     </div>
+                  )}
+
+                  {/* Suggestions Section */}
+                  <div className="space-y-4">
+                     <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-slate-900">People You May Know</h2>
+                        <Button variant="link" onClick={() => setView('suggestions')} className="text-synapse-600 font-semibold">See all</Button>
+                     </div>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        {suggestions.slice(0, 8).map(s => (
+                           <SuggestionCard key={s.uid} user={s} />
+                        ))}
+                     </div>
+                  </div>
+               </div>
+            )}
+
+            {/* REQUESTS VIEW */}
             {view === 'requests' && (
                <div className="space-y-6">
                   <div className="flex items-center justify-between">
-                     <h2 className="text-xl font-bold text-slate-900">Friend Requests</h2>
-                     {requests.length > 0 && <Button variant="link" className="text-synapse-600">See all</Button>}
+                     <h2 className="text-2xl font-bold text-slate-900">Friend Requests</h2>
                   </div>
 
                   {requests.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                          {requests.map(req => (
-                             <Card key={req.id} className="overflow-hidden border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-                                <div className="aspect-square bg-slate-100 relative">
-                                   <img 
-                                     src={req.sender?.photoURL || ''} 
-                                     className="w-full h-full object-cover" 
-                                     alt={req.sender?.displayName || 'User'}
-                                   />
-                                </div>
-                                <div className="p-3 space-y-3">
-                                   <div className="space-y-1">
-                                      <h3 className="font-semibold text-[16px] text-slate-900 truncate leading-tight">{req.sender?.displayName}</h3>
-                                      <p className="text-xs text-slate-500">1 mutual friend</p>
-                                   </div>
-                                   <div className="space-y-2">
-                                      <FriendButton targetUid={req.senderId} className="w-full" />
-                                   </div>
-                                </div>
-                             </Card>
+                             <FriendRequestCard key={req.id} req={req} />
                          ))}
                       </div>
                   ) : (
-                      <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-slate-100 shadow-sm">
-                         <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                            <UserPlus className="w-10 h-10 text-slate-300" />
-                         </div>
-                         <h3 className="text-lg font-bold text-slate-900">No new requests</h3>
-                      </div>
+                      <EmptyState 
+                        icon={UserPlus} 
+                        title="No new requests" 
+                        desc="When people send you friend requests, they'll appear here." 
+                      />
                   )}
                </div>
             )}
 
+            {/* SUGGESTIONS VIEW */}
             {view === 'suggestions' && (
                <div className="space-y-6">
-                  <h2 className="text-xl font-bold text-slate-900">People You May Know</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">People You May Know</h2>
                   {loading ? (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {[1,2,3,4].map(i => <div key={i} className="aspect-[3/4] bg-slate-100 rounded-xl animate-pulse" />)}
+                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                        {[1,2,3,4,5,6].map(i => <div key={i} className="aspect-[3/4] bg-slate-100 rounded-3xl animate-pulse" />)}
                      </div>
                   ) : suggestions.length > 0 ? (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {suggestions.map(s => (
-                           <Card key={s.uid} className="overflow-hidden border-slate-200 shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                              <div className="aspect-square bg-slate-100 relative shrink-0">
-                                 <img 
-                                   src={s.photoURL || `https://ui-avatars.com/api/?name=${s.displayName}`} 
-                                   className="w-full h-full object-cover" 
-                                   alt={s.displayName || 'User'}
-                                 />
-                              </div>
-                              <div className="p-3 space-y-3 flex-1 flex flex-col">
-                                 <div className="space-y-1 flex-1">
-                                    <h3 className="font-semibold text-[16px] text-slate-900 truncate leading-tight">{s.displayName}</h3>
-                                    <p className="text-xs text-slate-500">Suggested for you</p>
-                                 </div>
-                                 <div className="space-y-2 mt-auto">
-                                    <FriendButton targetUid={s.uid} className="w-full" />
-                                    <Button variant="secondary" className="w-full text-slate-700 bg-slate-100 hover:bg-slate-200">Remove</Button>
-                                 </div>
-                              </div>
-                           </Card>
+                           <SuggestionCard key={s.uid} user={s} />
                         ))}
                      </div>
                   ) : (
-                     <div className="text-center py-20 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-slate-900">No suggestions</h3>
-                     </div>
+                      <EmptyState 
+                        icon={Sparkles} 
+                        title="No suggestions yet" 
+                        desc="Try searching for people you know to build your network." 
+                      />
                   )}
                </div>
             )}
 
+            {/* ALL FRIENDS VIEW */}
             {view === 'all' && (
                <div className="space-y-6">
-                  <div className="flex items-center justify-between">
-                     <h2 className="text-xl font-bold text-slate-900">All Friends</h2>
-                     <input 
-                       type="text" 
-                       placeholder="Search Friends" 
-                       className="bg-slate-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-synapse-500 w-48 focus:w-64 transition-all"
-                     />
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                     <h2 className="text-2xl font-bold text-slate-900">All Friends</h2>
+                     <div className="relative w-full md:w-72">
+                        <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                        <input 
+                           type="text" 
+                           placeholder="Search Friends" 
+                           value={searchTerm}
+                           onChange={(e) => setSearchTerm(e.target.value)}
+                           className="w-full bg-slate-100 hover:bg-white focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-[15px] focus:outline-none focus:ring-2 focus:ring-synapse-500/20 border border-transparent focus:border-synapse-200 transition-all"
+                        />
+                     </div>
                   </div>
                   
                   {friends.length > 0 ? (
-                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3">
-                        {friends.map(friend => (
-                           <Card key={friend.uid} className="flex items-center gap-4 p-4 hover:bg-slate-50 transition-colors border-slate-200 shadow-sm">
-                              <Avatar className="w-20 h-20 rounded-xl border border-slate-100">
+                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
+                        {filteredFriends.map(friend => (
+                           <Card key={friend.uid} className="flex items-center gap-4 p-4 hover:shadow-md transition-all border-slate-100 bg-white rounded-2xl group">
+                              <Avatar className="w-20 h-20 rounded-2xl border border-slate-100 shadow-sm group-hover:scale-105 transition-transform">
                                  <AvatarImage src={friend.photoURL || ''} />
                                  <AvatarFallback>{friend.displayName?.[0]}</AvatarFallback>
                               </Avatar>
                               <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                                 <h3 className="font-semibold text-slate-900 text-base truncate">{friend.displayName}</h3>
-                                 <p className="text-xs text-slate-500">Synapse User</p>
+                                 <h3 className="font-bold text-slate-900 text-[17px] truncate">{friend.displayName}</h3>
+                                 <p className="text-xs text-slate-500 font-medium">Synapse User</p>
                               </div>
-                              <FriendButton targetUid={friend.uid} size="icon" className="rounded-full" />
+                              <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <FriendButton targetUid={friend.uid} size="icon" className="rounded-xl" />
+                              </div>
                            </Card>
                         ))}
+                        {filteredFriends.length === 0 && searchTerm && (
+                           <div className="col-span-full py-12 text-center text-slate-500">
+                              No friends found matching "{searchTerm}"
+                           </div>
+                        )}
                      </div>
                   ) : (
-                     <div className="text-center py-20 bg-white rounded-xl border border-slate-100 shadow-sm">
-                        <Users className="w-10 h-10 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold text-slate-900">No friends yet</h3>
-                        <Button variant="link" className="mt-2 text-synapse-600" onClick={() => setView('suggestions')}>Find Friends</Button>
-                     </div>
+                      <EmptyState 
+                        icon={Users} 
+                        title="No friends yet" 
+                        desc="Start adding friends to see them listed here." 
+                        action={<Button variant="outline" onClick={() => setView('suggestions')}>Find Friends</Button>}
+                      />
                   )}
                </div>
             )}
@@ -306,3 +328,61 @@ export const FriendsPage: React.FC = () => {
     </div>
   );
 };
+
+// --- Sub Components ---
+
+const FriendRequestCard = ({ req }: { req: FriendRequest }) => (
+    <Card className="overflow-hidden border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl flex flex-col group bg-white">
+      <div className="aspect-square bg-slate-100 relative overflow-hidden">
+          <img 
+            src={req.sender?.photoURL || ''} 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+            alt={req.sender?.displayName || 'User'}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60" />
+      </div>
+      <div className="p-4 space-y-3 flex-1 flex flex-col -mt-12 relative z-10">
+          <div className="space-y-0.5 flex-1 text-white drop-shadow-md">
+            <h3 className="font-bold text-lg truncate leading-tight">{req.sender?.displayName}</h3>
+            <p className="text-xs opacity-90 font-medium">1 mutual friend</p>
+          </div>
+          <div className="space-y-2 pt-4 bg-white rounded-t-2xl -mx-4 px-4">
+            <FriendButton targetUid={req.senderId} className="w-full shadow-lg shadow-synapse-500/20" />
+            <Button variant="secondary" className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700">Delete</Button>
+          </div>
+      </div>
+    </Card>
+);
+
+const SuggestionCard = ({ user }: { user: UserProfile }) => (
+    <Card className="overflow-hidden border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl flex flex-col group bg-white">
+        <div className="aspect-square bg-slate-100 relative overflow-hidden">
+          <img 
+            src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+            alt={user.displayName || 'User'}
+          />
+        </div>
+        <div className="p-4 space-y-3 flex-1 flex flex-col">
+          <div className="space-y-1 flex-1">
+              <h3 className="font-bold text-[17px] text-slate-900 truncate leading-tight">{user.displayName}</h3>
+              <p className="text-xs text-slate-500 font-medium">Suggested for you</p>
+          </div>
+          <div className="space-y-2 mt-auto">
+              <FriendButton targetUid={user.uid} className="w-full" />
+              <Button variant="ghost" className="w-full text-slate-400 hover:text-slate-600 hover:bg-slate-50">Remove</Button>
+          </div>
+        </div>
+    </Card>
+);
+
+const EmptyState = ({ icon: Icon, title, desc, action }: { icon: any, title: string, desc: string, action?: React.ReactNode }) => (
+    <div className="flex flex-col items-center justify-center py-24 bg-white rounded-3xl border border-slate-100 shadow-sm text-center px-6 animate-in fade-in zoom-in-95 duration-500">
+        <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-6 shadow-inner">
+          <Icon className="w-10 h-10 text-slate-300" />
+        </div>
+        <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
+        <p className="text-slate-500 max-w-sm mx-auto mb-6 leading-relaxed">{desc}</p>
+        {action}
+    </div>
+);
