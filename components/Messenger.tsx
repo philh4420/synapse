@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Send, MoreHorizontal, Edit, Search, ArrowLeft, 
   Smile, Image as ImageIcon, Phone, Video, Info, X, Bell, Ban, ThumbsUp,
-  ChevronDown, Flag, UserX, UserCheck, ShieldAlert
+  ChevronDown, Flag, UserX, UserCheck, Check
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMessenger } from '../context/MessengerContext';
@@ -20,6 +20,18 @@ import { cn } from '../lib/utils';
 import { formatDistanceToNow, format } from 'date-fns';
 import { uploadToCloudinary } from '../utils/upload';
 
+// Theme Options
+const THEMES = [
+  { id: 'default', color: 'bg-synapse-600', name: 'Synapse Blue' },
+  { id: 'rose', color: 'bg-rose-500', name: 'Rose' },
+  { id: 'purple', color: 'bg-purple-600', name: 'Purple' },
+  { id: 'emerald', color: 'bg-emerald-500', name: 'Emerald' },
+  { id: 'orange', color: 'bg-orange-500', name: 'Orange' },
+  { id: 'slate', color: 'bg-slate-800', name: 'Midnight' },
+];
+
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡', '🔥'];
+
 export const Messenger: React.FC = () => {
   const { user, userProfile } = useAuth();
   const { isOpen, closeChat, activeUserId } = useMessenger();
@@ -35,6 +47,10 @@ export const Messenger: React.FC = () => {
   const [friendSearch, setFriendSearch] = useState('');
   const [loadingChats, setLoadingChats] = useState(true);
   const [showChatInfo, setShowChatInfo] = useState(false);
+  
+  // New Features State
+  const [sharedPhotos, setSharedPhotos] = useState<string[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
   
   // Real-time Partner Info
   const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
@@ -83,14 +99,15 @@ export const Messenger: React.FC = () => {
     });
   }, [chats, user]);
 
-  // 3. Fetch Messages & Partner Profile for Active Chat
+  // 3. Fetch Messages, Partner Profile & Shared Photos
   useEffect(() => {
     if (!activeChatId || !user) {
         setPartnerProfile(null);
+        setSharedPhotos([]);
         return;
     }
 
-    // Messages Listener
+    // A. Messages Listener
     const qMsgs = query(
       collection(db, 'chats', activeChatId, 'messages'),
       orderBy('timestamp', 'asc'),
@@ -108,7 +125,7 @@ export const Messenger: React.FC = () => {
       }, 100);
     });
 
-    // Partner Profile Listener (for Real-time Online Status)
+    // B. Partner Profile & Shared Photos
     const activeChat = chats.find(c => c.id === activeChatId);
     let unsubProfile = () => {};
     
@@ -121,13 +138,37 @@ export const Messenger: React.FC = () => {
                 }
             });
         }
+        
+        // Fetch Shared Photos (Separate query to get history)
+        const fetchPhotos = async () => {
+           setPhotosLoading(true);
+           try {
+              // Note: Using a simple client-side filter of the last 50 messages for this demo to avoid extra indexes
+              // In production, use a separate 'media' collection or a specific compound query
+              const qPhotos = query(
+                 collection(db, 'chats', activeChatId, 'messages'),
+                 orderBy('timestamp', 'desc'),
+                 limit(100)
+              );
+              const snap = await getDocs(qPhotos);
+              const photos = snap.docs
+                 .map(d => d.data().image)
+                 .filter(img => img); // Filter non-null
+              setSharedPhotos(photos);
+           } catch (e) { console.error("Error fetching photos", e); }
+           finally { setPhotosLoading(false); }
+        };
+        
+        if (showChatInfo) {
+           fetchPhotos();
+        }
     }
 
     return () => {
         unsubMsgs();
         unsubProfile();
     };
-  }, [activeChatId, chats, user]);
+  }, [activeChatId, chats, user, showChatInfo]);
 
   // 4. Mark as Read Logic
   useEffect(() => {
@@ -240,6 +281,15 @@ export const Messenger: React.FC = () => {
       }
   };
 
+  const updateChatSettings = async (key: string, value: any) => {
+     if (!activeChatId) return;
+     try {
+        await updateDoc(doc(db, 'chats', activeChatId), { [key]: value });
+     } catch(e) {
+        console.error("Failed to update chat settings", e);
+     }
+  };
+
   const startChat = async (friend: UserProfile) => {
     if (!user || !userProfile) return;
 
@@ -317,9 +367,9 @@ export const Messenger: React.FC = () => {
      }
   };
 
-  const sendMessage = async (e: React.FormEvent) => {
+  const sendMessage = async (e: React.FormEvent, content: string = newMessage) => {
     e.preventDefault();
-    if (!newMessage.trim() || !activeChatId || !user) return;
+    if (!content.trim() || !activeChatId || !user) return;
 
     // Check Block Status
     if (partnerProfile && userProfile?.blockedUsers?.includes(partnerProfile.uid)) {
@@ -327,19 +377,18 @@ export const Messenger: React.FC = () => {
         return;
     }
 
-    const text = newMessage;
     setNewMessage('');
 
     try {
       await addDoc(collection(db, 'chats', activeChatId, 'messages'), {
-        text,
+        text: content,
         senderId: user.uid,
         timestamp: serverTimestamp()
       });
 
       await updateDoc(doc(db, 'chats', activeChatId), {
         lastMessage: {
-          text,
+          text: content,
           senderId: user.uid,
           timestamp: serverTimestamp(),
           read: false
@@ -366,6 +415,8 @@ export const Messenger: React.FC = () => {
 
   const activeChatData = chats.find(c => c.id === activeChatId);
   const activeChatPartner = activeChatData ? getOtherParticipant(activeChatData) : null;
+  const currentTheme = THEMES.find(t => t.id === (activeChatData as any)?.theme) || THEMES[0];
+  const currentEmoji = (activeChatData as any)?.emoji || '👍';
   
   // Real-time status logic
   const isOnline = partnerProfile?.isOnline;
@@ -535,9 +586,9 @@ export const Messenger: React.FC = () => {
                      )}
                   </div>
                   <div className="flex gap-1 text-synapse-600 dark:text-synapse-400">
-                     <Button variant="ghost" size="icon" onClick={handleCall} className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Phone className="w-5 h-5" /></Button>
-                     <Button variant="ghost" size="icon" onClick={handleCall} className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Video className="w-5 h-5" /></Button>
-                     <Button variant="ghost" size="icon" className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setShowChatInfo(!showChatInfo)}>
+                     <Button variant="ghost" size="icon" onClick={handleCall} className={cn("rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><Phone className="w-5 h-5" /></Button>
+                     <Button variant="ghost" size="icon" onClick={handleCall} className={cn("rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><Video className="w-5 h-5" /></Button>
+                     <Button variant="ghost" size="icon" className={cn("rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)} onClick={() => setShowChatInfo(!showChatInfo)}>
                         <Info className={cn("w-5 h-5", showChatInfo && "fill-current")} />
                      </Button>
                      <div className="hidden md:flex ml-2 border-l border-slate-200 pl-2">
@@ -599,7 +650,7 @@ export const Messenger: React.FC = () => {
                                  {msg.text && (
                                     <div className={cn("break-words px-4 py-2 text-[15px]", 
                                        isMe 
-                                          ? "bg-synapse-600 text-white" 
+                                          ? `${currentTheme.color} text-white`
                                           : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100",
                                        
                                        isFirstInSequence && isLastInSequence ? "rounded-2xl" :
@@ -607,7 +658,7 @@ export const Messenger: React.FC = () => {
                                        !isFirstInSequence && isLastInSequence ? (isMe ? "rounded-2xl rounded-tr-md" : "rounded-2xl rounded-tl-md") :
                                        (isMe ? "rounded-2xl rounded-r-md" : "rounded-2xl rounded-l-md"),
                                        
-                                       "mb-0.5"
+                                       "mb-0.5 transition-colors duration-300"
                                     )}>
                                        {msg.text}
                                     </div>
@@ -635,14 +686,14 @@ export const Messenger: React.FC = () => {
                           <p>You have blocked this user. Unblock to send messages.</p>
                       </div>
                   ) : (
-                    <form onSubmit={sendMessage} className="flex items-end gap-2">
+                    <form onSubmit={(e) => sendMessage(e)} className="flex items-end gap-2">
                         <div className="flex gap-1 mb-2">
-                            <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MoreHorizontal className="w-5 h-5" /></Button>
-                            <Button type="button" onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 relative">
-                            {isUploading ? <div className="w-4 h-4 border-2 border-synapse-600 border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+                            <Button type="button" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><MoreHorizontal className="w-5 h-5" /></Button>
+                            <Button type="button" onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 relative", `text-${currentTheme.color.replace('bg-', '')}`)}>
+                            {isUploading ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-5 h-5" />}
                             </Button>
                             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-                            <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800"><Smile className="w-5 h-5" /></Button>
+                            <Button type="button" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><Smile className="w-5 h-5" /></Button>
                         </div>
                         <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center px-4 py-2 mb-1">
                             <input 
@@ -654,12 +705,12 @@ export const Messenger: React.FC = () => {
                             <button type="button" className="text-slate-400 hover:text-slate-600"><Smile className="w-5 h-5" /></button>
                         </div>
                         {newMessage.trim() ? (
-                            <Button type="submit" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 mb-1">
+                            <Button type="submit" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mb-1", `text-${currentTheme.color.replace('bg-', '')}`)}>
                             <Send className="w-5 h-5 fill-current" />
                             </Button>
                         ) : (
-                            <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 mb-1">
-                            <ThumbsUp className="w-5 h-5 fill-current" />
+                            <Button type="button" onClick={(e) => sendMessage(e, currentEmoji)} variant="ghost" size="icon" className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mb-1 text-2xl">
+                               {currentEmoji}
                             </Button>
                         )}
                     </form>
@@ -723,19 +774,71 @@ export const Messenger: React.FC = () => {
             </div>
 
             <div className="p-2 space-y-1">
+               {/* Chat Info Accordion */}
                <AccordionItem title="Chat Info">
-                  <p className="text-sm text-slate-500">Theme</p>
-                  <p className="text-sm text-slate-500">Emoji</p>
-               </AccordionItem>
-               <AccordionItem title="Media, Files and Links">
-                  <div className="grid grid-cols-3 gap-1">
-                     {[1,2,3].map(i => (
-                        <div key={i} className="bg-slate-100 aspect-square rounded-lg"></div>
-                     ))}
+                  <div className="space-y-3 pt-2">
+                     <div className="flex items-center justify-between group cursor-pointer" onClick={() => updateChatSettings('theme', currentTheme.id === 'default' ? 'rose' : 'default')}>
+                        <p className="text-sm text-slate-600 font-medium">Theme</p>
+                        <div className={cn("w-6 h-6 rounded-full cursor-pointer border border-slate-200 shadow-sm", currentTheme.color)} />
+                     </div>
+                     {/* Theme Picker Grid (Visible mostly) */}
+                     <div className="grid grid-cols-6 gap-2">
+                        {THEMES.map(theme => (
+                           <button 
+                              key={theme.id}
+                              onClick={() => updateChatSettings('theme', theme.id)}
+                              className={cn(
+                                 "w-6 h-6 rounded-full transition-transform hover:scale-110", 
+                                 theme.color,
+                                 currentTheme.id === theme.id ? "ring-2 ring-offset-2 ring-slate-400 scale-110" : ""
+                              )}
+                              title={theme.name}
+                           />
+                        ))}
+                     </div>
+
+                     <div className="flex items-center justify-between group cursor-pointer">
+                        <p className="text-sm text-slate-600 font-medium">Emoji</p>
+                        <span className="text-xl">{currentEmoji}</span>
+                     </div>
+                     {/* Emoji Picker Grid */}
+                     <div className="flex justify-between bg-slate-50 p-2 rounded-xl">
+                        {QUICK_EMOJIS.map(emoji => (
+                           <button 
+                              key={emoji}
+                              onClick={() => updateChatSettings('emoji', emoji)}
+                              className={cn(
+                                 "text-lg hover:scale-125 transition-transform", 
+                                 currentEmoji === emoji ? "scale-125 drop-shadow-sm" : "opacity-70 hover:opacity-100"
+                              )}
+                           >
+                              {emoji}
+                           </button>
+                        ))}
+                     </div>
                   </div>
                </AccordionItem>
+
+               {/* Media Accordion */}
+               <AccordionItem title="Media, Files and Links">
+                  {sharedPhotos.length > 0 ? (
+                     <div className="grid grid-cols-3 gap-1 pt-1">
+                        {sharedPhotos.map((photo, i) => (
+                           <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden cursor-pointer hover:opacity-90">
+                              <img src={photo} className="w-full h-full object-cover" alt="shared" />
+                           </div>
+                        ))}
+                     </div>
+                  ) : (
+                     <div className="text-center py-4 text-slate-400 text-xs">
+                        {photosLoading ? "Loading..." : "No media shared yet"}
+                     </div>
+                  )}
+               </AccordionItem>
+
+               {/* Privacy Accordion */}
                <AccordionItem title="Privacy & Support">
-                  <div className="space-y-2">
+                  <div className="space-y-2 pt-1">
                      <button 
                         onClick={handleBlockUser}
                         className={cn(
@@ -775,7 +878,7 @@ const AccordionItem: React.FC<{ title: string; children: React.ReactNode }> = ({
             <span className="font-bold text-sm text-slate-700">{title}</span>
             <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", open && "rotate-180")} />
          </button>
-         {open && <div className="px-3 pb-3 pt-1">{children}</div>}
+         {open && <div className="px-3 pb-3 pt-1 animate-in slide-in-from-top-2">{children}</div>}
       </div>
    );
 };
