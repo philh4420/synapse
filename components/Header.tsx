@@ -69,6 +69,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     { id: 'feed', icon: Home, label: 'Home' },
     { id: 'friends', icon: Users, label: 'Friends' }, 
     { id: 'videos', icon: MonitorPlay, label: 'Watch' },
+    { id: 'marketplace', icon: Store, label: 'Marketplace' },
   ];
 
   if (userProfile?.role === 'admin') {
@@ -556,7 +557,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                             </div>
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent className="w-64">
-                            <DropdownMenuItem className="py-2">Settings</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setActiveTab('settings')} className="py-2">Settings</DropdownMenuItem>
                             <DropdownMenuItem className="py-2">Privacy Checkup</DropdownMenuItem>
                             <DropdownMenuItem className="py-2">Privacy Center</DropdownMenuItem>
                             <DropdownMenuItem className="py-2">Activity Log</DropdownMenuItem>

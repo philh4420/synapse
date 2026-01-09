@@ -2,6 +2,21 @@
 
 export type ReactionType = 'like' | 'love' | 'care' | 'haha' | 'wow' | 'sad' | 'angry';
 
+export interface UserSettings {
+  theme?: 'light' | 'dark' | 'system';
+  language?: string;
+  privacyDefault?: 'public' | 'friends' | 'only_me';
+  notifications?: {
+    email?: boolean;
+    push?: boolean;
+    comments?: boolean;
+    friendRequests?: boolean;
+    tags?: boolean;
+  };
+  loginAlerts?: boolean;
+  twoFactor?: boolean;
+}
+
 export interface UserProfile {
   uid: string;
   email: string | null;
@@ -27,6 +42,9 @@ export interface UserProfile {
   website?: string;
   gender?: string;
   languages?: string;
+  
+  // Settings
+  settings?: UserSettings;
 }
 
 export interface Post {
