@@ -58,6 +58,7 @@ export const SettingsPage: React.FC = () => {
   // Account Deletion
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   // Initialize state from profile
   useEffect(() => {
@@ -178,6 +179,11 @@ export const SettingsPage: React.FC = () => {
 
   const handleDeleteAccount = async () => {
      if (!user || !deletePassword) return;
+     if (deleteConfirmationText !== 'DELETE') {
+        toast("Please type DELETE to confirm.", "error");
+        return;
+     }
+
      setLoading(true);
      try {
         const credential = EmailAuthProvider.credential(user.email!, deletePassword);
@@ -201,6 +207,12 @@ export const SettingsPage: React.FC = () => {
         }
         setLoading(false);
      }
+  };
+
+  const openDeleteDialog = () => {
+     setDeletePassword('');
+     setDeleteConfirmationText('');
+     setDeleteDialogOpen(true);
   };
 
   // --- UI Components ---
@@ -311,7 +323,7 @@ export const SettingsPage: React.FC = () => {
                   <div>
                      <h3 className="text-lg font-bold text-red-600 mb-2">Danger Zone</h3>
                      <p className="text-sm text-slate-500 mb-4">Permanently delete your account and all of your content.</p>
-                     <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)} className="rounded-xl">
+                     <Button variant="destructive" onClick={openDeleteDialog} className="rounded-xl">
                         <Trash2 className="w-4 h-4 mr-2" /> Delete Account
                      </Button>
                   </div>
@@ -528,21 +540,30 @@ export const SettingsPage: React.FC = () => {
                   <AlertTriangle className="w-5 h-5" /> Delete Account
                </DialogTitle>
                <DialogDescription>
-                  This action is permanent and cannot be undone. Please enter your password to confirm.
+                  This action is permanent and cannot be undone. To prevent accidental deletion, you must type <span className="font-bold text-slate-900">DELETE</span> below.
                </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
+            <div className="py-4 space-y-4">
+               <Input 
+                  placeholder="Type DELETE"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  className={cn("font-bold tracking-wider", deleteConfirmationText === 'DELETE' ? "border-red-500 focus:ring-red-500 text-red-600" : "")}
+               />
                <Input 
                   type="password"
-                  placeholder="Password"
+                  placeholder="Enter your password"
                   value={deletePassword}
                   onChange={(e) => setDeletePassword(e.target.value)}
-                  className="border-red-200 focus:ring-red-500/20"
                />
             </div>
             <DialogFooter>
                <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-               <Button variant="destructive" onClick={handleDeleteAccount} disabled={loading || !deletePassword}>
+               <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteAccount} 
+                  disabled={loading || !deletePassword || deleteConfirmationText !== 'DELETE'}
+               >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Permanently"}
                </Button>
             </DialogFooter>
