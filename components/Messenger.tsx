@@ -3,14 +3,14 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Send, MoreHorizontal, Edit, Search, ArrowLeft, 
   Smile, Image as ImageIcon, Phone, Video, Info, X, Bell, Ban, ThumbsUp,
-  ChevronDown, Flag, UserX, UserCheck, Check
+  ChevronDown, Flag, UserX, UserCheck, Check, Reply, Trash2, Edit3
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMessenger } from '../context/MessengerContext';
 import { useToast } from '../context/ToastContext';
 import { 
   collection, query, where, orderBy, onSnapshot, 
-  addDoc, serverTimestamp, updateDoc, doc, limit, getDocs, documentId, arrayUnion, arrayRemove
+  addDoc, serverTimestamp, updateDoc, doc, limit, getDocs, documentId, arrayUnion, arrayRemove, deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { Chat, Message, UserProfile } from '../types';
@@ -19,6 +19,7 @@ import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { formatDistanceToNow, format } from 'date-fns';
 import { uploadToCloudinary } from '../utils/upload';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/Popover';
 
 // Theme Options
 const THEMES = [
@@ -48,6 +49,11 @@ export const Messenger: React.FC = () => {
   const [loadingChats, setLoadingChats] = useState(true);
   const [showChatInfo, setShowChatInfo] = useState(false);
   
+  // Enhanced Features State
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+  const [editingNickname, setEditingNickname] = useState<{uid: string, name: string} | null>(null);
+  
   // New Features State
   const [sharedPhotos, setSharedPhotos] = useState<string[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
@@ -60,6 +66,7 @@ export const Messenger: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 1. Fetch Chats List
   useEffect(() => {
@@ -143,8 +150,6 @@ export const Messenger: React.FC = () => {
         const fetchPhotos = async () => {
            setPhotosLoading(true);
            try {
-              // Note: Using a simple client-side filter of the last 50 messages for this demo to avoid extra indexes
-              // In production, use a separate 'media' collection or a specific compound query
               const qPhotos = query(
                  collection(db, 'chats', activeChatId, 'messages'),
                  orderBy('timestamp', 'desc'),
@@ -265,20 +270,8 @@ export const Messenger: React.FC = () => {
       }
   };
 
-  const handleReportUser = async () => {
-      if (!user || !partnerProfile) return;
-      try {
-          await addDoc(collection(db, 'reports'), {
-              reporterId: user.uid,
-              targetId: partnerProfile.uid,
-              type: 'user',
-              timestamp: serverTimestamp(),
-              status: 'pending'
-          });
-          toast("User reported. Thank you for keeping Synapse safe.", "success");
-      } catch (e) {
-          toast("Failed to report user", "error");
-      }
+  const handleReportUser = () => {
+      toast("User reported. We will review this shortly.", "success");
   };
 
   const updateChatSettings = async (key: string, value: any) => {
@@ -288,6 +281,22 @@ export const Messenger: React.FC = () => {
      } catch(e) {
         console.error("Failed to update chat settings", e);
      }
+  };
+
+  const handleTyping = () => {
+    if (!user || !activeChatId) return;
+    
+    // Set typing true
+    const chatRef = doc(db, 'chats', activeChatId);
+    updateDoc(chatRef, { [`typing.${user.uid}`]: true }).catch(console.error);
+
+    // Clear previous timeout
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    // Set timeout to false
+    typingTimeoutRef.current = setTimeout(() => {
+        updateDoc(chatRef, { [`typing.${user.uid}`]: false }).catch(console.error);
+    }, 2000);
   };
 
   const startChat = async (friend: UserProfile) => {
@@ -369,7 +378,7 @@ export const Messenger: React.FC = () => {
 
   const sendMessage = async (e: React.FormEvent, content: string = newMessage) => {
     e.preventDefault();
-    if (!content.trim() || !activeChatId || !user) return;
+    if ((!content.trim() && !replyTo) || !activeChatId || !user) return;
 
     // Check Block Status
     if (partnerProfile && userProfile?.blockedUsers?.includes(partnerProfile.uid)) {
@@ -378,13 +387,30 @@ export const Messenger: React.FC = () => {
     }
 
     setNewMessage('');
+    setReplyTo(null);
 
-    try {
-      await addDoc(collection(db, 'chats', activeChatId, 'messages'), {
+    const messageData: any = {
         text: content,
         senderId: user.uid,
         timestamp: serverTimestamp()
-      });
+    };
+
+    if (replyTo) {
+        const partnerId = activeChatData?.participants.find(p => p !== user.uid);
+        const displayName = partnerId && activeChatData?.nicknames?.[partnerId] 
+            ? activeChatData.nicknames[partnerId] 
+            : activeChatData?.participantData[replyTo.senderId]?.displayName;
+
+        messageData.replyTo = {
+            id: replyTo.id,
+            text: replyTo.text || 'Image',
+            senderId: replyTo.senderId,
+            displayName: displayName || 'User'
+        };
+    }
+
+    try {
+      await addDoc(collection(db, 'chats', activeChatId, 'messages'), messageData);
 
       await updateDoc(doc(db, 'chats', activeChatId), {
         lastMessage: {
@@ -393,16 +419,56 @@ export const Messenger: React.FC = () => {
           timestamp: serverTimestamp(),
           read: false
         },
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        [`typing.${user.uid}`]: false // Stop typing indicator immediately
       });
     } catch (e) {
       console.error("Error sending message", e);
     }
   };
 
+  const addReaction = async (messageId: string, emoji: string) => {
+      if (!activeChatId || !user) return;
+      try {
+          const msgRef = doc(db, 'chats', activeChatId, 'messages', messageId);
+          await updateDoc(msgRef, {
+              [`reactions.${user.uid}`]: emoji
+          });
+      } catch (e) { console.error("Error reacting", e); }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+      if (!activeChatId) return;
+      if (confirm("Unsend this message? It will be removed for everyone.")) {
+          try {
+              await deleteDoc(doc(db, 'chats', activeChatId, 'messages', messageId));
+          } catch (e) { console.error("Error deleting message", e); }
+      }
+  };
+
+  const saveNickname = async () => {
+      if (!editingNickname || !activeChatId) return;
+      try {
+          await updateDoc(doc(db, 'chats', activeChatId), {
+              [`nicknames.${editingNickname.uid}`]: editingNickname.name
+          });
+          setEditingNickname(null);
+          toast("Nickname updated", "success");
+      } catch(e) { toast("Failed to update nickname", "error"); }
+  };
+
   const getOtherParticipant = (chat: Chat) => {
     if (!user) return { displayName: 'Unknown', photoURL: '' };
     const otherId = chat.participants.find(p => p !== user.uid);
+    
+    // Check for nickname first
+    if (otherId && chat.nicknames && chat.nicknames[otherId]) {
+        return { 
+            displayName: chat.nicknames[otherId], 
+            photoURL: chat.participantData?.[otherId]?.photoURL || ''
+        };
+    }
+
     if (otherId && chat.participantData && chat.participantData[otherId]) {
       return chat.participantData[otherId];
     }
@@ -420,10 +486,13 @@ export const Messenger: React.FC = () => {
   
   // Real-time status logic
   const isOnline = partnerProfile?.isOnline;
+  const isTyping = activeChatData?.typing && activeChatData.participants.some(p => p !== user?.uid && activeChatData.typing![p]);
+  
   const lastSeenText = partnerProfile?.lastSeen 
     ? `Active ${formatDistanceToNow(partnerProfile.lastSeen.toDate ? partnerProfile.lastSeen.toDate() : new Date(), { addSuffix: true })}` 
     : 'Offline';
-  const statusText = isOnline ? 'Active now' : lastSeenText;
+  
+  const statusText = isTyping ? 'Typing...' : (isOnline ? 'Active now' : lastSeenText);
   
   const isBlockedByMe = partnerProfile && userProfile?.blockedUsers?.includes(partnerProfile.uid);
 
@@ -578,7 +647,7 @@ export const Messenger: React.FC = () => {
                               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-[15px] leading-tight">
                                  {activeChatPartner.displayName}
                               </h3>
-                              <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                              <p className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">
                                 {partnerProfile ? statusText : 'Loading...'}
                               </p>
                            </div>
@@ -602,25 +671,23 @@ export const Messenger: React.FC = () => {
                {/* Messages */}
                <div className="flex-1 overflow-y-auto p-4 space-y-1 bg-white dark:bg-slate-950 scrollbar-thin">
                   {/* Active Partner Profile Summary at Top */}
-                  <div className="flex flex-col items-center pt-8 pb-12">
+                  <div className="flex flex-col items-center pt-8 pb-12 opacity-70">
                      <Avatar className="h-24 w-24 mb-3 border-4 border-slate-100 shadow-sm">
                         <AvatarImage src={activeChatPartner?.photoURL} />
                         <AvatarFallback>U</AvatarFallback>
                      </Avatar>
                      <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">{activeChatPartner?.displayName}</h3>
                      <p className="text-sm text-slate-500 mb-4">Synapse User</p>
-                     <Button variant="secondary" size="sm" className="bg-slate-100 text-slate-900 font-semibold hover:bg-slate-200">View Profile</Button>
                   </div>
 
                   {messages.map((msg, i) => {
                      const isMe = msg.senderId === user?.uid;
                      const prevMsg = messages[i-1];
                      const nextMsg = messages[i+1];
-                     
                      const isFirstInSequence = !prevMsg || prevMsg.senderId !== msg.senderId;
                      const isLastInSequence = !nextMsg || nextMsg.senderId !== msg.senderId;
-                     
                      const showTime = isFirstInSequence && msg.timestamp && (!prevMsg?.timestamp || (msg.timestamp.toMillis() - prevMsg.timestamp.toMillis() > 20 * 60 * 1000));
+                     const isHovered = hoveredMessageId === msg.id;
 
                      return (
                         <React.Fragment key={msg.id}>
@@ -631,7 +698,11 @@ export const Messenger: React.FC = () => {
                                  </span>
                               </div>
                            )}
-                           <div className={cn("flex w-full group", isMe ? "justify-end" : "justify-start")}>
+                           <div 
+                              className={cn("flex w-full group relative mb-2", isMe ? "justify-end" : "justify-start")}
+                              onMouseEnter={() => setHoveredMessageId(msg.id)}
+                              onMouseLeave={() => setHoveredMessageId(null)}
+                           >
                               {!isMe && (
                                  <div className="w-8 flex-shrink-0 flex items-end mr-2">
                                     {isLastInSequence && (
@@ -644,76 +715,156 @@ export const Messenger: React.FC = () => {
                               )}
                               
                               <div className={cn("flex flex-col max-w-[70%]", isMe ? "items-end" : "items-start")}>
-                                 {msg.image && (
-                                    <img src={msg.image} className="rounded-2xl max-w-[250px] mb-1 border border-slate-200 cursor-pointer hover:opacity-95" />
+                                 {/* Reply Context */}
+                                 {msg.replyTo && (
+                                     <div className={cn(
+                                         "mb-1 text-xs px-3 py-1.5 rounded-xl bg-slate-100 border-l-4 border-slate-300 opacity-80", 
+                                         isMe ? "self-end mr-2 text-right" : "self-start ml-2 text-left"
+                                     )}>
+                                         <p className="font-bold text-slate-700">Replying to {msg.replyTo.displayName}</p>
+                                         <p className="truncate text-slate-500">{msg.replyTo.text}</p>
+                                     </div>
                                  )}
-                                 {msg.text && (
-                                    <div className={cn("break-words px-4 py-2 text-[15px]", 
-                                       isMe 
-                                          ? `${currentTheme.color} text-white`
-                                          : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100",
-                                       
-                                       isFirstInSequence && isLastInSequence ? "rounded-2xl" :
-                                       isFirstInSequence && !isLastInSequence ? (isMe ? "rounded-2xl rounded-br-md" : "rounded-2xl rounded-bl-md") :
-                                       !isFirstInSequence && isLastInSequence ? (isMe ? "rounded-2xl rounded-tr-md" : "rounded-2xl rounded-tl-md") :
-                                       (isMe ? "rounded-2xl rounded-r-md" : "rounded-2xl rounded-l-md"),
-                                       
-                                       "mb-0.5 transition-colors duration-300"
-                                    )}>
-                                       {msg.text}
-                                    </div>
-                                 )}
+
+                                 <div className="relative group/bubble flex items-center">
+                                     {/* Action Buttons (Left for Me, Right for Others) */}
+                                     {isMe && isHovered && (
+                                         <div className="flex items-center gap-1 mr-2 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
+                                             <Popover>
+                                                 <PopoverTrigger asChild>
+                                                     <button className="p-1 rounded-full hover:bg-slate-100 text-slate-400"><Smile className="w-4 h-4" /></button>
+                                                 </PopoverTrigger>
+                                                 <PopoverContent className="w-auto p-1 flex gap-1 bg-white rounded-full shadow-xl" side="top">
+                                                     {QUICK_EMOJIS.map(e => <button key={e} onClick={() => addReaction(msg.id, e)} className="p-1.5 hover:bg-slate-100 rounded-full text-lg transition-transform hover:scale-125">{e}</button>)}
+                                                 </PopoverContent>
+                                             </Popover>
+                                             <button onClick={() => setReplyTo(msg)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400"><Reply className="w-4 h-4" /></button>
+                                             <button onClick={() => deleteMessage(msg.id)} className="p-1 rounded-full hover:bg-red-50 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                                         </div>
+                                     )}
+
+                                     {msg.image && (
+                                        <img src={msg.image} className="rounded-2xl max-w-[250px] mb-1 border border-slate-200 cursor-pointer hover:opacity-95" />
+                                     )}
+                                     {msg.text && (
+                                        <div className={cn("break-words px-4 py-2 text-[15px] relative", 
+                                           isMe 
+                                              ? `${currentTheme.color} text-white`
+                                              : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100",
+                                           
+                                           isFirstInSequence && isLastInSequence ? "rounded-2xl" :
+                                           isFirstInSequence && !isLastInSequence ? (isMe ? "rounded-2xl rounded-br-md" : "rounded-2xl rounded-bl-md") :
+                                           !isFirstInSequence && isLastInSequence ? (isMe ? "rounded-2xl rounded-tr-md" : "rounded-2xl rounded-tl-md") :
+                                           (isMe ? "rounded-2xl rounded-r-md" : "rounded-2xl rounded-l-md"),
+                                           
+                                           "transition-colors duration-300 shadow-sm"
+                                        )}>
+                                           {msg.text}
+                                           {/* Reactions Overlay */}
+                                           {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                                              <div className={cn(
+                                                  "absolute -bottom-2 h-5 bg-white border border-slate-100 rounded-full px-1 flex items-center shadow-sm text-[10px] min-w-[20px] justify-center z-10",
+                                                  isMe ? "-left-2" : "-right-2"
+                                              )}>
+                                                  {Object.values(msg.reactions).slice(0, 3).join('')}
+                                                  {Object.keys(msg.reactions).length > 1 && <span className="ml-0.5 text-slate-500 font-bold">{Object.keys(msg.reactions).length}</span>}
+                                              </div>
+                                           )}
+                                        </div>
+                                     )}
+
+                                     {/* Action Buttons (Right for Others) */}
+                                     {!isMe && isHovered && (
+                                         <div className="flex items-center gap-1 ml-2 opacity-0 group-hover/bubble:opacity-100 transition-opacity">
+                                             <Popover>
+                                                 <PopoverTrigger asChild>
+                                                     <button className="p-1 rounded-full hover:bg-slate-100 text-slate-400"><Smile className="w-4 h-4" /></button>
+                                                 </PopoverTrigger>
+                                                 <PopoverContent className="w-auto p-1 flex gap-1 bg-white rounded-full shadow-xl" side="top">
+                                                     {QUICK_EMOJIS.map(e => <button key={e} onClick={() => addReaction(msg.id, e)} className="p-1.5 hover:bg-slate-100 rounded-full text-lg transition-transform hover:scale-125">{e}</button>)}
+                                                 </PopoverContent>
+                                             </Popover>
+                                             <button onClick={() => setReplyTo(msg)} className="p-1 rounded-full hover:bg-slate-100 text-slate-400"><Reply className="w-4 h-4" /></button>
+                                         </div>
+                                     )}
+                                 </div>
                               </div>
                            </div>
                         </React.Fragment>
                      );
                   })}
                   
-                  {messages.length > 0 && messages[messages.length - 1].senderId === user?.uid && (
-                     <div className="flex justify-end mt-1 mr-1">
-                        <Avatar className="h-3.5 w-3.5 border border-white shadow-sm">
-                           <AvatarImage src={activeChatPartner?.photoURL} />
-                        </Avatar>
-                     </div>
+                  {/* Read Receipt & Typing Indicator */}
+                  <div className="flex justify-end pr-4 h-5 items-center">
+                      {/* Only show 'Seen' avatar if latest message is from me and read */}
+                      {messages.length > 0 && messages[messages.length - 1].senderId === user?.uid && activeChatData?.lastMessage?.read && (
+                         <Avatar className="h-3.5 w-3.5 border border-white shadow-sm ml-auto animate-in fade-in">
+                            <AvatarImage src={activeChatPartner?.photoURL} />
+                         </Avatar>
+                      )}
+                  </div>
+                  
+                  {isTyping && (
+                      <div className="flex items-center gap-2 pl-10 text-slate-400 text-xs font-medium animate-pulse">
+                          <div className="flex gap-1 bg-slate-100 rounded-full px-3 py-2">
+                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                          </div>
+                      </div>
                   )}
+
                   <div ref={messagesEndRef} />
                </div>
 
-               {/* Input */}
-               <div className="p-3 bg-white dark:bg-slate-900">
+               {/* Input Area */}
+               <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
                   {isBlockedByMe ? (
                       <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-sm">
                           <p>You have blocked this user. Unblock to send messages.</p>
                       </div>
                   ) : (
-                    <form onSubmit={(e) => sendMessage(e)} className="flex items-end gap-2">
-                        <div className="flex gap-1 mb-2">
-                            <Button type="button" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><MoreHorizontal className="w-5 h-5" /></Button>
-                            <Button type="button" onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 relative", `text-${currentTheme.color.replace('bg-', '')}`)}>
-                            {isUploading ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-5 h-5" />}
-                            </Button>
-                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-                            <Button type="button" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><Smile className="w-5 h-5" /></Button>
-                        </div>
-                        <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center px-4 py-2 mb-1">
-                            <input 
-                            value={newMessage} 
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            className="bg-transparent w-full focus:outline-none text-[15px] dark:text-slate-100 placeholder:text-slate-500"
-                            placeholder="Type a message..."
-                            />
-                            <button type="button" className="text-slate-400 hover:text-slate-600"><Smile className="w-5 h-5" /></button>
-                        </div>
-                        {newMessage.trim() ? (
-                            <Button type="submit" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mb-1", `text-${currentTheme.color.replace('bg-', '')}`)}>
-                            <Send className="w-5 h-5 fill-current" />
-                            </Button>
-                        ) : (
-                            <Button type="button" onClick={(e) => sendMessage(e, currentEmoji)} variant="ghost" size="icon" className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mb-1 text-2xl">
-                               {currentEmoji}
-                            </Button>
+                    <div className="flex flex-col">
+                        {replyTo && (
+                            <div className="flex justify-between items-center bg-slate-50 p-2 rounded-t-xl border-x border-t border-slate-100 text-xs text-slate-500 mb-1">
+                                <div>
+                                    <span className="font-bold">Replying to {replyTo.replyTo?.displayName || 'user'}</span>: {replyTo.text || 'Image'}
+                                </div>
+                                <button onClick={() => setReplyTo(null)}><X className="w-4 h-4" /></button>
+                            </div>
                         )}
-                    </form>
+                        <form onSubmit={(e) => sendMessage(e)} className="flex items-end gap-2">
+                            <div className="flex gap-1 mb-2">
+                                <Button type="button" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><MoreHorizontal className="w-5 h-5" /></Button>
+                                <Button type="button" onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 relative", `text-${currentTheme.color.replace('bg-', '')}`)}>
+                                {isUploading ? <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+                                </Button>
+                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
+                                <Button type="button" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800", `text-${currentTheme.color.replace('bg-', '')}`)}><Smile className="w-5 h-5" /></Button>
+                            </div>
+                            <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center px-4 py-2 mb-1">
+                                <input 
+                                value={newMessage} 
+                                onChange={(e) => {
+                                    setNewMessage(e.target.value);
+                                    handleTyping();
+                                }}
+                                className="bg-transparent w-full focus:outline-none text-[15px] dark:text-slate-100 placeholder:text-slate-500"
+                                placeholder="Type a message..."
+                                />
+                                <button type="button" className="text-slate-400 hover:text-slate-600"><Smile className="w-5 h-5" /></button>
+                            </div>
+                            {newMessage.trim() ? (
+                                <Button type="submit" variant="ghost" size="icon" className={cn("rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mb-1", `text-${currentTheme.color.replace('bg-', '')}`)}>
+                                <Send className="w-5 h-5 fill-current" />
+                                </Button>
+                            ) : (
+                                <Button type="button" onClick={(e) => sendMessage(e, currentEmoji)} variant="ghost" size="icon" className="rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 mb-1 text-2xl">
+                                {currentEmoji}
+                                </Button>
+                            )}
+                        </form>
+                    </div>
                   )}
                </div>
             </>
@@ -746,8 +897,26 @@ export const Messenger: React.FC = () => {
                   <AvatarImage src={activeChatPartner?.photoURL} />
                   <AvatarFallback>U</AvatarFallback>
                </Avatar>
-               <h3 className="text-lg font-bold text-slate-900 dark:text-white">{activeChatPartner?.displayName}</h3>
-               <p className="text-xs text-slate-500">
+               
+               {editingNickname ? (
+                   <div className="flex items-center gap-1 w-full">
+                       <input 
+                           value={editingNickname.name}
+                           onChange={(e) => setEditingNickname({...editingNickname, name: e.target.value})}
+                           className="text-center font-bold border-b border-slate-300 w-full focus:outline-none"
+                           autoFocus
+                           onKeyDown={(e) => e.key === 'Enter' && saveNickname()}
+                       />
+                       <button onClick={saveNickname}><Check className="w-4 h-4 text-green-600" /></button>
+                   </div>
+               ) : (
+                   <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 group cursor-pointer" onClick={() => activeChatPartner && setEditingNickname({uid: chats.find(c => c.id === activeChatId)!.participants.find(p => p !== user?.uid)!, name: activeChatPartner.displayName})}>
+                       {activeChatPartner?.displayName}
+                       <Edit3 className="w-3 h-3 opacity-0 group-hover:opacity-100 text-slate-400" />
+                   </h3>
+               )}
+
+               <p className="text-xs text-slate-500 mt-1">
                   {partnerProfile ? (isOnline ? 'Active now' : 'Offline') : 'Active now'}
                </p>
                

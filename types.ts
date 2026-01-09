@@ -221,6 +221,10 @@ export interface Chat {
     read: boolean;
   };
   updatedAt: any;
+  theme?: string;
+  emoji?: string;
+  nicknames?: Record<string, string>;
+  typing?: Record<string, boolean>;
 }
 
 export interface Message {
@@ -229,4 +233,11 @@ export interface Message {
   senderId: string;
   timestamp: any;
   image?: string;
+  replyTo?: {
+    id: string;
+    text: string;
+    senderId: string;
+    displayName?: string;
+  };
+  reactions?: Record<string, string>; // uid -> emoji
 }
