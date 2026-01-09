@@ -42,7 +42,7 @@ export const Messenger: React.FC = () => {
   // If not open, don't render anything
   if (!isOpen) return null;
 
-  // 1. Fetch Chats
+  // 1. Fetch Chats List
   useEffect(() => {
     if (!user) return;
 
@@ -64,43 +64,7 @@ export const Messenger: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // Handle activeUserId from Context (Profile Button Click)
-  useEffect(() => {
-    if (activeUserId && chats.length > 0) {
-      const existingChat = chats.find(c => c.participants.includes(activeUserId));
-      if (existingChat) {
-        setActiveChatId(existingChat.id);
-        setIsNewChat(false);
-      } else {
-        const createImmediate = async () => {
-           try {
-             // Fetch target profile
-             const q = query(collection(db, 'users'), where('uid', '==', activeUserId));
-             const snap = await getDocs(q);
-             if (!snap.empty) {
-                const targetUser = snap.docs[0].data() as UserProfile;
-                await startChat(targetUser);
-             }
-           } catch(e) { console.error("Error starting chat from context", e); }
-        };
-        createImmediate();
-      }
-    } else if (activeUserId && chats.length === 0 && !loadingChats) {
-        const createImmediate = async () => {
-           try {
-             const q = query(collection(db, 'users'), where('uid', '==', activeUserId));
-             const snap = await getDocs(q);
-             if (!snap.empty) {
-                const targetUser = snap.docs[0].data() as UserProfile;
-                await startChat(targetUser);
-             }
-           } catch(e) { console.error("Error starting chat from context", e); }
-        };
-        createImmediate();
-    }
-  }, [activeUserId, chats, loadingChats]);
-
-  // 2. Fetch Messages for Active Chat
+  // 2. Fetch Messages for Active Chat (Separated from Chats update)
   useEffect(() => {
     if (!activeChatId) return;
 
@@ -116,30 +80,75 @@ export const Messenger: React.FC = () => {
         ...doc.data()
       })) as Message[];
       setMessages(msgs);
-      setTimeout(scrollToBottom, 100);
+      setTimeout(() => {
+         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
     });
 
-    // Mark as Read Logic
-    const chatDocRef = doc(db, 'chats', activeChatId);
-    // Optimization: Only update if necessary to avoid write loops
-    // In a real app, check message sender vs me.
-    // Here we trust the lastMessage metadata on the chat doc.
+    return () => unsubscribe();
+  }, [activeChatId]);
+
+  // 3. Mark as Read Logic (Depends on chats to check lastMessage state)
+  useEffect(() => {
+    if (!activeChatId || !user) return;
+
     const activeChat = chats.find(c => c.id === activeChatId);
-    if (activeChat && activeChat.lastMessage && !activeChat.lastMessage.read && activeChat.lastMessage.senderId !== user?.uid) {
+    if (activeChat && activeChat.lastMessage && !activeChat.lastMessage.read && activeChat.lastMessage.senderId !== user.uid) {
+       const chatDocRef = doc(db, 'chats', activeChatId);
        updateDoc(chatDocRef, {
           'lastMessage.read': true
        }).catch(e => console.error("Error marking read", e));
     }
+  }, [chats, activeChatId, user]);
 
-    return () => unsubscribe();
-  }, [activeChatId, chats]); // Depend on chats to access lastMessage state
+  // 4. Handle activeUserId from Context (Start/Open Chat)
+  // We use a ref to track if we've already handled the activeUserId to prevent loops
+  const handledUserIdRef = useRef<string | null>(null);
 
-  // 3. Fetch Friends for New Chat
+  useEffect(() => {
+    if (!activeUserId || handledUserIdRef.current === activeUserId || loadingChats) return;
+
+    const handleOpen = async () => {
+        // Check if chat exists in currently loaded chats
+        const existingChat = chats.find(c => c.participants.includes(activeUserId));
+        
+        if (existingChat) {
+            setActiveChatId(existingChat.id);
+            setIsNewChat(false);
+            handledUserIdRef.current = activeUserId;
+        } else {
+            // Try to fetch or create
+            try {
+                // First check DB if local chats list might be stale or incomplete (though onSnapshot should handle it)
+                // Assuming chats list is complete for user. If not found, create.
+                const userDoc = await import('firebase/firestore').then(mod => mod.getDoc(doc(db, 'users', activeUserId)));
+                if (userDoc.exists()) {
+                    const targetUser = userDoc.data() as UserProfile;
+                    await startChat(targetUser);
+                    handledUserIdRef.current = activeUserId;
+                }
+            } catch(e) { console.error("Error opening chat", e); }
+        }
+    };
+
+    handleOpen();
+  }, [activeUserId, chats, loadingChats]);
+
+  // Reset handled ref when messenger closes
+  useEffect(() => {
+      if (!isOpen) handledUserIdRef.current = null;
+  }, [isOpen]);
+
+  // 5. Fetch Friends for New Chat
   useEffect(() => {
     if (isNewChat && userProfile?.friends) {
       const fetchFriends = async () => {
         if (!userProfile.friends || userProfile.friends.length === 0) return;
-        const friendIds = userProfile.friends.slice(0, 20); // Limit for demo
+        
+        // Filter out empty strings
+        const friendIds = userProfile.friends.filter(Boolean).slice(0, 20); 
+        if (friendIds.length === 0) return;
+
         try {
            const chunks = [];
            for (let i = 0; i < friendIds.length; i += 10) {
@@ -159,13 +168,10 @@ export const Messenger: React.FC = () => {
     }
   }, [isNewChat, userProfile]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   const startChat = async (friend: UserProfile) => {
     if (!user || !userProfile) return;
 
+    // Check if chat already exists
     const existingChat = chats.find(c => c.participants.includes(friend.uid));
     
     if (existingChat) {
