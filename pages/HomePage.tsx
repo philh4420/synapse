@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '../components/Sidebar';
 import { Feed } from '../components/Feed';
 import { RightPanel } from '../components/RightPanel';
@@ -20,15 +20,36 @@ import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 
 export const HomePage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('feed');
+  // Initialize state from localStorage if available
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('synapse_active_tab') || 'feed';
+  });
+  
+  const [viewedProfileUid, setViewedProfileUid] = useState<string | null>(() => {
+    const stored = localStorage.getItem('synapse_viewed_profile');
+    return stored === 'null' || !stored ? null : stored;
+  });
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [viewedProfileUid, setViewedProfileUid] = useState<string | null>(null);
   const { userProfile } = useAuth();
+
+  // Persist state changes
+  useEffect(() => {
+    localStorage.setItem('synapse_active_tab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (viewedProfileUid) {
+      localStorage.setItem('synapse_viewed_profile', viewedProfileUid);
+    } else {
+      localStorage.removeItem('synapse_viewed_profile');
+    }
+  }, [viewedProfileUid]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     if (tab === 'profile') {
-      // If manually clicking profile tab, reset to own profile
+      // If manually clicking profile tab (e.g. from nav), reset to own profile
       setViewedProfileUid(null);
     }
   };
