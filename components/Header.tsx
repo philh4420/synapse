@@ -400,7 +400,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           {/* Main Menu Popover */}
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="hidden md:inline-flex rounded-full bg-slate-100/50 hover:bg-synapse-50 text-slate-700 hover:text-synapse-600 h-10 w-10 transition-colors">
+              <Button variant="ghost" size="icon" className="hidden md:inline-flex rounded-full bg-slate-100/50 hover:bg-slate-100 text-slate-700 hover:text-synapse-600 h-10 w-10 transition-colors">
                   <LayoutGrid className="w-5 h-5" />
               </Button>
             </PopoverTrigger>
@@ -547,22 +547,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 </div>
 
                 <DropdownMenuGroup>
-                    <DropdownMenuSub>
-                        <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer hover:bg-slate-50">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
-                                    <Settings className="w-5 h-5 text-slate-700" />
-                                </div>
-                                <span className="font-medium text-slate-900">Settings & privacy</span>
+                    <DropdownMenuItem 
+                        className="py-2.5 px-3 rounded-lg cursor-pointer hover:bg-slate-50 focus:bg-slate-50"
+                        onClick={() => setActiveTab('settings')}
+                    >
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center">
+                                <Settings className="w-5 h-5 text-slate-700" />
                             </div>
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-64">
-                            <DropdownMenuItem onClick={() => setActiveTab('settings')} className="py-2 cursor-pointer font-medium">Settings</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2 cursor-pointer">Privacy Checkup</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2 cursor-pointer">Privacy Center</DropdownMenuItem>
-                            <DropdownMenuItem className="py-2 cursor-pointer">Activity Log</DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                    </DropdownMenuSub>
+                            <span className="font-medium text-slate-900">Settings & privacy</span>
+                        </div>
+                    </DropdownMenuItem>
 
                     <DropdownMenuSub>
                         <DropdownMenuSubTrigger className="py-2.5 px-3 rounded-lg cursor-pointer hover:bg-slate-50">
