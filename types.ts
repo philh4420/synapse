@@ -95,6 +95,20 @@ export interface Story {
   timestamp: Date;
 }
 
+export interface Page {
+  id: string;
+  name: string;
+  handle: string;
+  category: string;
+  description: string;
+  coverURL: string;
+  photoURL: string;
+  ownerId: string;
+  followers: number;
+  verified: boolean;
+  timestamp: any;
+}
+
 export interface NavItem {
   icon: React.ElementType;
   label: string;
