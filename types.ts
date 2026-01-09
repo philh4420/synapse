@@ -1,4 +1,5 @@
 
+
 export type ReactionType = 'like' | 'love' | 'care' | 'haha' | 'wow' | 'sad' | 'angry';
 
 export interface UserProfile {
@@ -12,6 +13,7 @@ export interface UserProfile {
   followers?: string[];
   following?: string[];
   friends?: string[]; // Array of UIDs
+  savedPosts?: string[]; // Array of Post IDs
   birthDate?: string; // ISO Date string YYYY-MM-DD
   
   // Extended Details
@@ -53,6 +55,20 @@ export interface Post {
   location?: string; // e.g., "at New York City"
   taggedUsers?: string[]; // Array of display names
   gif?: string; // GIF URL
+  
+  // Sharing
+  sharedPost?: {
+    id: string;
+    author: {
+      name: string;
+      avatar: string;
+      uid: string;
+    };
+    content: string;
+    image?: string;
+    video?: string;
+    timestamp: any;
+  };
 }
 
 export interface Comment {

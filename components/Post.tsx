@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ThumbsUp, MessageCircle, Share2, MoreHorizontal, Globe, 
-  Trash2, Send, X, MessageSquare, Users, Lock, Edit3, Camera, Loader2, Smile, Gift, Search, AlertTriangle, Play
+  Trash2, Send, X, MessageSquare, Users, Lock, Edit3, Camera, Loader2, Smile, Gift, Search, AlertTriangle, Play, Bookmark, Copy, Repeat
 } from 'lucide-react';
 import { Post as PostType, ReactionType, Comment } from '../types';
 import { formatDistanceToNow } from 'date-fns';
@@ -54,7 +55,7 @@ const REACTIONS: { type: ReactionType; emoji: string; label: string; color: stri
 const EMOJIS = ['🙂', '😀', '😂', '😍', '🥰', '😎', '😭', '😡', '👍', '👎', '🎉', '🔥', '❤️', '💔', '✨', '🎁', '👋', '🙏', '🤔', '🙄', '😴', '🤮', '🤯', '🥳'];
 
 export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, refreshProfile } = useAuth();
   const { toast } = useToast();
   
   // -- State --
@@ -93,12 +94,18 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
     targetId?: string;
   }>({ isOpen: false, type: 'post' });
   
+  // Sharing & Lightbox
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  
   // Optimistic Reactions
   const [currentReaction, setCurrentReaction] = useState<ReactionType | null>(null);
 
   // -- Derived --
   const displayImages = isEditing ? editImages : (currentPost.images || (currentPost.image ? [currentPost.image] : []));
   const isAuthor = user?.uid === currentPost.author.uid;
+  const isSaved = userProfile?.savedPosts?.includes(currentPost.id) || false;
 
   // -- Effects --
   useEffect(() => {
@@ -188,6 +195,67 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
       setCurrentReaction(oldReaction);
       toast("Failed to react", "error");
     }
+  };
+
+  const handleSavePost = async () => {
+    if (!user) return;
+    const userRef = doc(db, 'users', user.uid);
+    try {
+      if (isSaved) {
+        await updateDoc(userRef, { savedPosts: arrayRemove(currentPost.id) });
+        toast("Post unsaved", "info");
+      } else {
+        await updateDoc(userRef, { savedPosts: arrayUnion(currentPost.id) });
+        toast("Post saved to your collection", "success");
+      }
+      await refreshProfile();
+    } catch (e) {
+      toast("Failed to update save state", "error");
+    }
+  };
+
+  const handleSharePost = async () => {
+    if (!user) return;
+    setIsSharing(true);
+    try {
+      await addDoc(collection(db, 'posts'), {
+        author: {
+          name: userProfile?.displayName || user.displayName || 'User',
+          handle: user.email || '@user',
+          avatar: userProfile?.photoURL || user.photoURL || '',
+          uid: user.uid
+        },
+        content: `Shared ${currentPost.author.name}'s post`,
+        timestamp: serverTimestamp(),
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        likedByUsers: [],
+        privacy: 'public',
+        sharedPost: {
+          id: currentPost.id,
+          author: currentPost.author,
+          content: currentPost.content,
+          image: currentPost.images?.[0] || currentPost.image || null,
+          video: currentPost.video || null,
+          timestamp: currentPost.timestamp
+        }
+      });
+      
+      await updateDoc(doc(db, 'posts', currentPost.id), { shares: increment(1) });
+      setShareDialogOpen(false);
+      toast("Shared to your feed", "success");
+    } catch (e) {
+      toast("Failed to share post", "error");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/post/${currentPost.id}`);
+    toast("Link copied to clipboard", "success");
+    setShareDialogOpen(false);
   };
 
   const handleCommentFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,6 +434,8 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
 
   const renderPhotoGrid = () => {
     if (displayImages.length === 0) return null;
+    
+    // Edit mode grid
     if (isEditing) {
        return (
           <div className="p-3 grid grid-cols-2 gap-2">
@@ -383,11 +453,15 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
           </div>
        );
     }
+
+    // Display mode grid
     const count = displayImages.length;
-    if (count === 1) return <div className="w-full bg-slate-50 border-t border-b border-slate-100 flex items-center justify-center max-h-[600px] overflow-hidden cursor-pointer"><img src={displayImages[0]} alt="" className="w-full h-auto object-cover" /></div>;
-    if (count === 2) return <div className="w-full h-[350px] flex gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden"><img src={displayImages[0]} className="w-1/2 h-full object-cover" /><img src={displayImages[1]} className="w-1/2 h-full object-cover" /></div>;
-    if (count === 3) return <div className="w-full h-[400px] flex gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden"><div className="w-2/3 h-full"><img src={displayImages[0]} className="w-full h-full object-cover" /></div><div className="w-1/3 h-full flex flex-col gap-0.5"><img src={displayImages[1]} className="w-full h-1/2 object-cover" /><img src={displayImages[2]} className="w-full h-1/2 object-cover" /></div></div>;
-    return <div className="w-full h-[400px] flex flex-col gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden"><div className="w-full h-3/5"><img src={displayImages[0]} className="w-full h-full object-cover" /></div><div className="w-full h-2/5 flex gap-0.5"><img src={displayImages[1]} className="w-1/3 h-full object-cover" /><img src={displayImages[2]} className="w-1/3 h-full object-cover" /><div className="w-1/3 h-full relative"><img src={displayImages[3]} className="w-full h-full object-cover" />{count > 4 && <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold text-2xl">+{count - 4}</div>}</div></div></div>;
+    const clickHandler = (idx: number) => setLightboxIndex(idx);
+
+    if (count === 1) return <div className="w-full bg-slate-50 border-t border-b border-slate-100 flex items-center justify-center max-h-[600px] overflow-hidden cursor-pointer" onClick={() => clickHandler(0)}><img src={displayImages[0]} alt="" className="w-full h-auto object-cover" /></div>;
+    if (count === 2) return <div className="w-full h-[350px] flex gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden"><img src={displayImages[0]} className="w-1/2 h-full object-cover hover:opacity-90" onClick={() => clickHandler(0)} /><img src={displayImages[1]} className="w-1/2 h-full object-cover hover:opacity-90" onClick={() => clickHandler(1)} /></div>;
+    if (count === 3) return <div className="w-full h-[400px] flex gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden"><div className="w-2/3 h-full"><img src={displayImages[0]} className="w-full h-full object-cover hover:opacity-90" onClick={() => clickHandler(0)} /></div><div className="w-1/3 h-full flex flex-col gap-0.5"><img src={displayImages[1]} className="w-full h-1/2 object-cover hover:opacity-90" onClick={() => clickHandler(1)} /><img src={displayImages[2]} className="w-full h-1/2 object-cover hover:opacity-90" onClick={() => clickHandler(2)} /></div></div>;
+    return <div className="w-full h-[400px] flex flex-col gap-0.5 border-t border-b border-slate-100 cursor-pointer overflow-hidden"><div className="w-full h-3/5"><img src={displayImages[0]} className="w-full h-full object-cover hover:opacity-90" onClick={() => clickHandler(0)} /></div><div className="w-full h-2/5 flex gap-0.5"><img src={displayImages[1]} className="w-1/3 h-full object-cover hover:opacity-90" onClick={() => clickHandler(1)} /><img src={displayImages[2]} className="w-1/3 h-full object-cover hover:opacity-90" onClick={() => clickHandler(2)} /><div className="w-1/3 h-full relative" onClick={() => clickHandler(3)}><img src={displayImages[3]} className="w-full h-full object-cover hover:opacity-90" />{count > 4 && <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white font-bold text-2xl">+{count - 4}</div>}</div></div></div>;
   };
 
   if (isDeleting) return null;
@@ -430,7 +504,10 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 rounded-xl p-2 shadow-xl border-slate-100">
-              <DropdownMenuItem className="gap-3 cursor-pointer font-medium py-2 rounded-lg"><Share2 className="w-5 h-5" /> Save post</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleSavePost} className="gap-3 cursor-pointer font-medium py-2 rounded-lg">
+                <Bookmark className={cn("w-5 h-5", isSaved ? "fill-current text-synapse-600" : "")} /> 
+                {isSaved ? "Unsave post" : "Save post"}
+              </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-slate-100" />
               {isAuthor && (
                 <>
@@ -457,7 +534,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
             />
          </div>
       ) : (
-         currentPost.background && !displayImages.length && !currentPost.gif && !currentPost.video ? (
+         currentPost.background && !displayImages.length && !currentPost.gif && !currentPost.video && !currentPost.sharedPost ? (
            <div className={`w-full min-h-[350px] flex items-center justify-center p-8 text-center ${currentPost.background}`}>
               <p className="whitespace-pre-wrap font-bold text-2xl">{currentPost.content}</p>
            </div>
@@ -481,6 +558,32 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
       {currentPost.gif && !isEditing && (
         <div className="w-full bg-slate-50 border-t border-b border-slate-100">
            <img src={currentPost.gif} className="w-full h-auto object-cover" />
+        </div>
+      )}
+
+      {/* Shared Post Content */}
+      {currentPost.sharedPost && (
+        <div className="px-3 pb-3">
+          <div className="border border-slate-200 rounded-xl overflow-hidden hover:bg-slate-50 transition-colors cursor-pointer">
+             <div className="p-3 bg-white border-b border-slate-100 flex gap-2 items-center">
+                 <Avatar className="h-8 w-8">
+                    <AvatarImage src={currentPost.sharedPost.author.avatar} />
+                    <AvatarFallback>{currentPost.sharedPost.author.name[0]}</AvatarFallback>
+                 </Avatar>
+                 <div className="flex flex-col">
+                    <span className="font-semibold text-sm">{currentPost.sharedPost.author.name}</span>
+                    <span className="text-xs text-slate-500">{formatDistanceToNow(currentPost.sharedPost.timestamp.toDate ? currentPost.sharedPost.timestamp.toDate() : currentPost.sharedPost.timestamp)} ago</span>
+                 </div>
+             </div>
+             <div className="p-3 bg-white">
+                <p className="text-sm">{currentPost.sharedPost.content}</p>
+             </div>
+             {currentPost.sharedPost.image && (
+                <div className="w-full max-h-[300px] overflow-hidden">
+                   <img src={currentPost.sharedPost.image} className="w-full h-full object-cover" />
+                </div>
+             )}
+          </div>
         </div>
       )}
 
@@ -508,6 +611,7 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
             </div>
             <div className="flex items-center gap-3 text-slate-500 text-[15px]">
                 {currentPost.comments > 0 && <span onClick={() => setShowComments(true)} className="hover:underline cursor-pointer">{currentPost.comments} comments</span>}
+                {currentPost.shares > 0 && <span className="hover:underline cursor-pointer">{currentPost.shares} shares</span>}
             </div>
           </div>
 
@@ -524,8 +628,14 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
                  {currentReaction ? <><span className="text-lg leading-none">{REACTIONS.find(r => r.type === currentReaction)?.emoji}</span><span>{REACTIONS.find(r => r.type === currentReaction)?.label}</span></> : <><ThumbsUp className="w-5 h-5 mb-0.5" /> <span>Like</span></>}
               </Button>
             </div>
-            <Button variant="ghost" onClick={() => setShowComments(!showComments)} className="flex-1 gap-2 font-semibold text-[15px] text-slate-600 hover:bg-slate-100 rounded-lg h-9 transition-colors select-none"><MessageSquare className="w-5 h-5 mb-0.5 scale-x-[-1]" /> Comment</Button>
-            <Button variant="ghost" className="flex-1 gap-2 font-semibold text-[15px] text-slate-600 hover:bg-slate-100 rounded-lg h-9 transition-colors select-none"><Share2 className="w-5 h-5 mb-0.5" /> Share</Button>
+            
+            <Button variant="ghost" onClick={() => setShowComments(!showComments)} className="flex-1 gap-2 font-semibold text-[15px] text-slate-600 hover:bg-slate-100 rounded-lg h-9 transition-colors select-none">
+              <MessageSquare className="w-5 h-5 mb-0.5 scale-x-[-1]" /> Comment
+            </Button>
+            
+            <Button variant="ghost" onClick={() => setShareDialogOpen(true)} className="flex-1 gap-2 font-semibold text-[15px] text-slate-600 hover:bg-slate-100 rounded-lg h-9 transition-colors select-none">
+              <Share2 className="w-5 h-5 mb-0.5" /> Share
+            </Button>
           </div>
 
           <div className="px-3"><Separator className="bg-slate-200" /></div>
@@ -611,12 +721,79 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
       )}
     </Card>
 
+    {/* Delete Dialog */}
     <Dialog open={deleteState.isOpen} onOpenChange={(open) => setDeleteState(prev => ({...prev, isOpen: open}))}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-red-500" />{deleteState.type === 'post' ? 'Delete Post?' : 'Delete Comment?'}</DialogTitle><DialogDescription className="pt-2">{deleteState.type === 'post' ? "Are you sure you want to delete this post? This action cannot be undone and will remove all comments and reactions." : "Are you sure you want to delete this comment? This action cannot be undone."}</DialogDescription></DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0"><Button variant="ghost" onClick={() => setDeleteState(prev => ({...prev, isOpen: false}))}>Cancel</Button><Button variant="destructive" onClick={confirmDelete}>Delete</Button></DialogFooter>
         </DialogContent>
     </Dialog>
+
+    {/* Share Dialog */}
+    <Dialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+       <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-white">
+          <DialogHeader className="p-4 border-b border-slate-100 text-center relative">
+             <DialogTitle className="text-lg font-bold">Share Post</DialogTitle>
+             <button onClick={() => setShareDialogOpen(false)} className="absolute right-4 top-4 p-1.5 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"><X className="w-4 h-4 text-slate-500" /></button>
+          </DialogHeader>
+          <div className="p-4 grid grid-cols-2 gap-3">
+             <button onClick={handleSharePost} disabled={isSharing} className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100 group">
+                <div className="w-12 h-12 bg-synapse-50 rounded-full flex items-center justify-center group-hover:bg-synapse-100 transition-colors">
+                   {isSharing ? <Loader2 className="w-6 h-6 text-synapse-600 animate-spin" /> : <Repeat className="w-6 h-6 text-synapse-600" />}
+                </div>
+                <span className="font-semibold text-slate-900">Share Now (Public)</span>
+             </button>
+             <button onClick={copyLink} className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100 group">
+                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+                   <Copy className="w-6 h-6 text-slate-600" />
+                </div>
+                <span className="font-semibold text-slate-900">Copy Link</span>
+             </button>
+          </div>
+       </DialogContent>
+    </Dialog>
+
+    {/* Lightbox / Image Viewer */}
+    {lightboxIndex !== null && displayImages.length > 0 && (
+      <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center animate-in fade-in duration-300">
+         <button onClick={() => setLightboxIndex(null)} className="absolute top-4 left-4 p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-colors z-50">
+            <X className="w-6 h-6" />
+         </button>
+         
+         <div className="w-full h-full flex items-center justify-center relative p-4">
+             <img src={displayImages[lightboxIndex]} className="max-w-full max-h-full object-contain shadow-2xl" alt="" />
+             
+             {displayImages.length > 1 && (
+                <>
+                  <button 
+                     onClick={(e) => { e.stopPropagation(); setLightboxIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : displayImages.length - 1)); }}
+                     className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-all"
+                  >
+                     <ChevronLeftIcon className="w-8 h-8" />
+                  </button>
+                  <button 
+                     onClick={(e) => { e.stopPropagation(); setLightboxIndex((prev) => (prev !== null && prev < displayImages.length - 1 ? prev + 1 : 0)); }}
+                     className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-md transition-all"
+                  >
+                     <ChevronRightIcon className="w-8 h-8" />
+                  </button>
+                </>
+             )}
+         </div>
+         
+         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 font-medium bg-black/50 px-4 py-2 rounded-full backdrop-blur-md">
+            Image {lightboxIndex + 1} of {displayImages.length}
+         </div>
+      </div>
+    )}
     </>
   );
 };
+
+// Icons for Lightbox
+const ChevronLeftIcon = (props: any) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+);
+const ChevronRightIcon = (props: any) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+);
