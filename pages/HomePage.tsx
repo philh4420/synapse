@@ -14,16 +14,31 @@ import { cn } from '../lib/utils';
 export const HomePage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('feed');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [viewedProfileUid, setViewedProfileUid] = useState<string | null>(null);
   const { userProfile } = useAuth();
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    if (tab === 'profile') {
+      // If manually clicking profile tab, reset to own profile
+      setViewedProfileUid(null);
+    }
+  };
+
+  const handleViewProfile = (uid: string) => {
+    setViewedProfileUid(uid);
+    setActiveTab('profile');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const renderContent = () => {
     switch (activeTab) {
       case 'feed':
         return <Feed />;
       case 'profile':
-        return <Profile />;
+        return <Profile targetUid={viewedProfileUid} />;
       case 'friends':
-        return <FriendsPage />;
+        return <FriendsPage onViewProfile={handleViewProfile} />;
       case 'admin':
         return <AdminPanel />;
       default:
@@ -47,14 +62,14 @@ export const HomePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#F0F2F5]"> 
       
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Header activeTab={activeTab} setActiveTab={handleTabChange} />
 
       {/* Increased top padding (pt-24) to account for the floating header island */}
       <div className="pt-24 flex justify-between min-h-screen">
         
         {/* Left Sidebar */}
         <div className="hidden lg:block w-[280px] xl:w-[360px] flex-shrink-0 z-10">
-           <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+           <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} />
         </div>
 
         {/* Center Content */}
@@ -86,14 +101,14 @@ export const HomePage: React.FC = () => {
             {['Feed', 'Friends', 'Explore', 'Watch', 'Marketplace', 'Groups', 'Profile'].map((item) => (
               <button 
                 key={item}
-                onClick={() => { setActiveTab(item.toLowerCase() === 'watch' ? 'videos' : item.toLowerCase()); setMobileMenuOpen(false); }}
+                onClick={() => { handleTabChange(item.toLowerCase() === 'watch' ? 'videos' : item.toLowerCase()); setMobileMenuOpen(false); }}
                 className="block w-full text-left text-lg font-medium text-slate-800 py-3 border-b border-slate-100"
               >
                 {item}
               </button>
             ))}
             <button 
-                onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
+                onClick={() => { handleTabChange('admin'); setMobileMenuOpen(false); }}
                 className="block w-full text-left text-lg font-bold text-synapse-600 py-3 border-b border-slate-100"
             >
               Admin Panel

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Post as PostComponent } from './Post';
 import { CreatePost } from './CreatePost';
 import { Post as PostType, UserProfile } from '../types';
-import { collection, query, where, orderBy, onSnapshot, documentId, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, documentId, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { 
   MapPin, Link as LinkIcon, Edit3, Loader2, 
@@ -20,33 +20,54 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/Avatar';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 
-export const Profile: React.FC = () => {
+interface ProfileProps {
+  targetUid?: string | null;
+}
+
+export const Profile: React.FC<ProfileProps> = ({ targetUid }) => {
   const { userProfile: currentUserProfile, user } = useAuth();
   
-  // NOTE: In a real app with routing, we would check the URL param for UID.
-  // For this single-page demo, we assume we are viewing the Current User's profile if no prop is passed.
-  // However, to make this "Facebook clone" work for others, we normally need a routing system.
-  // Since the user asked for "fully working", I will simulate "My Profile" for now as the base,
-  // but I'll add the logic to conditionally render buttons *if* we were viewing someone else.
-  // Currently, the app structure doesn't easily support "viewing other profiles" without URL routing.
-  // I will proceed assuming this component handles the CURRENT user primarily, 
-  // but if the `user` context differed from the profile being fetched, it would show Friend Buttons.
-  
-  // For the purpose of the demo, `userProfile` from context IS the current user.
-  // We will stick to the current user view, but I will prepare the variable structure.
-  
-  const viewedProfile = currentUserProfile; // Alias for clarity
-  const isOwnProfile = true; // Hardcoded for this demo structure since we lack dynamic routing params
-
+  const [externalProfile, setExternalProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<PostType[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [friends, setFriends] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Posts');
 
+  // Determine which profile to show
+  // If targetUid is present and different from current user, we use externalProfile.
+  // Otherwise we use currentUserProfile.
+  const isOwnProfile = !targetUid || targetUid === user?.uid;
+  const viewedProfile = isOwnProfile ? currentUserProfile : externalProfile;
+
+  // Fetch External Profile Data if needed
   useEffect(() => {
-    if (!user || !viewedProfile) return;
+    if (targetUid && targetUid !== user?.uid) {
+      setProfileLoading(true);
+      const fetchUserProfile = async () => {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', targetUid));
+          if (userDoc.exists()) {
+            setExternalProfile(userDoc.data() as UserProfile);
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+        } finally {
+          setProfileLoading(false);
+        }
+      };
+      fetchUserProfile();
+    } else {
+      setExternalProfile(null);
+      setProfileLoading(false);
+    }
+  }, [targetUid, user]);
+
+  // Fetch Posts & Friends for the VIEWED profile
+  useEffect(() => {
+    if (!viewedProfile) return;
 
     // 1. Fetch Posts by viewed user
     const postsQuery = query(
@@ -98,9 +119,13 @@ export const Profile: React.FC = () => {
     fetchFriends();
 
     return () => unsubscribe();
-  }, [user, viewedProfile]);
+  }, [viewedProfile?.uid]); // Re-run when the viewed profile UID changes
 
-  if (!viewedProfile) return null;
+  if (profileLoading) {
+     return <div className="flex h-screen items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-synapse-600" /></div>;
+  }
+
+  if (!viewedProfile) return <div className="p-8 text-center text-slate-500">User not found</div>;
 
   // --- Sub-components for Tabs ---
 
@@ -111,7 +136,7 @@ export const Profile: React.FC = () => {
           <h3 className="text-xl font-bold text-slate-900 mb-4">Intro</h3>
           <div className="space-y-4 text-[15px] text-slate-900">
             <div className="text-center pb-2">
-              <p className="text-sm text-slate-600 mb-4">{viewedProfile.bio || 'Add a short bio.'}</p>
+              <p className="text-sm text-slate-600 mb-4">{viewedProfile.bio || (isOwnProfile ? 'Add a short bio.' : 'No bio available.')}</p>
               {isOwnProfile && (
                 <Button 
                   variant="secondary" 
@@ -221,7 +246,30 @@ export const Profile: React.FC = () => {
 
   const AboutTab = () => (
     <Card className="min-h-[500px] border-slate-200 shadow-sm p-8 text-center text-slate-500">
-      About section...
+       <div className="max-w-2xl mx-auto text-left space-y-6">
+          <h3 className="text-2xl font-bold text-slate-900 border-b border-slate-100 pb-4">About {viewedProfile.displayName}</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="space-y-1">
+               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Work</label>
+               <p className="text-slate-900 font-medium text-lg">{viewedProfile.work || 'No work info'}</p>
+               <p className="text-slate-500 text-sm">{viewedProfile.position}</p>
+             </div>
+             <div className="space-y-1">
+               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Education</label>
+               <p className="text-slate-900 font-medium text-lg">{viewedProfile.education || 'No education info'}</p>
+               <p className="text-slate-500 text-sm">{viewedProfile.highSchool}</p>
+             </div>
+             <div className="space-y-1">
+               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Location</label>
+               <p className="text-slate-900 font-medium text-lg">{viewedProfile.location || 'No location'}</p>
+             </div>
+             <div className="space-y-1">
+               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Hometown</label>
+               <p className="text-slate-900 font-medium text-lg">{viewedProfile.hometown || 'No hometown'}</p>
+             </div>
+          </div>
+       </div>
     </Card>
   );
 
@@ -267,7 +315,7 @@ export const Profile: React.FC = () => {
   );
 
   return (
-    <div className="bg-[#F0F2F5] min-h-screen -mt-6">
+    <div className="bg-[#F0F2F5] min-h-screen -mt-6 animate-in fade-in">
        <div className="bg-white shadow-sm pb-0">
           <div className="max-w-[1095px] mx-auto relative">
              <div className="relative w-full h-[200px] md:h-[350px] lg:h-[400px] bg-slate-200 rounded-b-xl overflow-hidden group">

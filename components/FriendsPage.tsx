@@ -13,7 +13,11 @@ import { Separator } from './ui/Separator';
 import { Input } from './ui/Input';
 import { cn } from '../lib/utils';
 
-export const FriendsPage: React.FC = () => {
+interface FriendsPageProps {
+  onViewProfile?: (uid: string) => void;
+}
+
+export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
   const { user, userProfile } = useAuth();
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<UserProfile[]>([]);
@@ -205,7 +209,7 @@ export const FriendsPage: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                            {requests.slice(0, 4).map(req => (
-                               <FriendRequestCard key={req.id} req={req} />
+                               <FriendRequestCard key={req.id} req={req} onViewProfile={onViewProfile} />
                            ))}
                         </div>
                      </div>
@@ -219,7 +223,7 @@ export const FriendsPage: React.FC = () => {
                      </div>
                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {suggestions.slice(0, 8).map(s => (
-                           <SuggestionCard key={s.uid} user={s} />
+                           <SuggestionCard key={s.uid} user={s} onViewProfile={onViewProfile} />
                         ))}
                      </div>
                   </div>
@@ -236,7 +240,7 @@ export const FriendsPage: React.FC = () => {
                   {requests.length > 0 ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                          {requests.map(req => (
-                             <FriendRequestCard key={req.id} req={req} />
+                             <FriendRequestCard key={req.id} req={req} onViewProfile={onViewProfile} />
                          ))}
                       </div>
                   ) : (
@@ -260,7 +264,7 @@ export const FriendsPage: React.FC = () => {
                   ) : suggestions.length > 0 ? (
                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                         {suggestions.map(s => (
-                           <SuggestionCard key={s.uid} user={s} />
+                           <SuggestionCard key={s.uid} user={s} onViewProfile={onViewProfile} />
                         ))}
                      </div>
                   ) : (
@@ -294,12 +298,22 @@ export const FriendsPage: React.FC = () => {
                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
                         {filteredFriends.map(friend => (
                            <Card key={friend.uid} className="flex items-center gap-4 p-4 hover:shadow-md transition-all border-slate-100 bg-white rounded-2xl group">
-                              <Avatar className="w-20 h-20 rounded-2xl border border-slate-100 shadow-sm group-hover:scale-105 transition-transform">
-                                 <AvatarImage src={friend.photoURL || ''} />
-                                 <AvatarFallback>{friend.displayName?.[0]}</AvatarFallback>
-                              </Avatar>
+                              <div 
+                                onClick={() => onViewProfile && onViewProfile(friend.uid)} 
+                                className="cursor-pointer"
+                              >
+                                <Avatar className="w-20 h-20 rounded-2xl border border-slate-100 shadow-sm group-hover:scale-105 transition-transform">
+                                   <AvatarImage src={friend.photoURL || ''} />
+                                   <AvatarFallback>{friend.displayName?.[0]}</AvatarFallback>
+                                </Avatar>
+                              </div>
                               <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                                 <h3 className="font-bold text-slate-900 text-[17px] truncate">{friend.displayName}</h3>
+                                 <h3 
+                                    className="font-bold text-slate-900 text-[17px] truncate cursor-pointer hover:underline"
+                                    onClick={() => onViewProfile && onViewProfile(friend.uid)}
+                                  >
+                                   {friend.displayName}
+                                 </h3>
                                  <p className="text-xs text-slate-500 font-medium">Synapse User</p>
                               </div>
                               <div className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -331,9 +345,12 @@ export const FriendsPage: React.FC = () => {
 
 // --- Sub Components ---
 
-const FriendRequestCard = ({ req }: { req: FriendRequest }) => (
+const FriendRequestCard = ({ req, onViewProfile }: { req: FriendRequest, onViewProfile?: (uid: string) => void }) => (
     <Card className="overflow-hidden border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl flex flex-col group bg-white">
-      <div className="aspect-square bg-slate-100 relative overflow-hidden">
+      <div 
+        className="aspect-square bg-slate-100 relative overflow-hidden cursor-pointer"
+        onClick={() => onViewProfile && onViewProfile(req.senderId)}
+      >
           <img 
             src={req.sender?.photoURL || ''} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
@@ -343,7 +360,12 @@ const FriendRequestCard = ({ req }: { req: FriendRequest }) => (
       </div>
       <div className="p-4 space-y-3 flex-1 flex flex-col -mt-12 relative z-10">
           <div className="space-y-0.5 flex-1 text-white drop-shadow-md">
-            <h3 className="font-bold text-lg truncate leading-tight">{req.sender?.displayName}</h3>
+            <h3 
+              className="font-bold text-lg truncate leading-tight cursor-pointer hover:underline"
+              onClick={() => onViewProfile && onViewProfile(req.senderId)}
+            >
+              {req.sender?.displayName}
+            </h3>
             <p className="text-xs opacity-90 font-medium">1 mutual friend</p>
           </div>
           <div className="space-y-2 pt-4 bg-white rounded-t-2xl -mx-4 px-4">
@@ -354,9 +376,12 @@ const FriendRequestCard = ({ req }: { req: FriendRequest }) => (
     </Card>
 );
 
-const SuggestionCard = ({ user }: { user: UserProfile }) => (
+const SuggestionCard = ({ user, onViewProfile }: { user: UserProfile, onViewProfile?: (uid: string) => void }) => (
     <Card className="overflow-hidden border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl flex flex-col group bg-white">
-        <div className="aspect-square bg-slate-100 relative overflow-hidden">
+        <div 
+          className="aspect-square bg-slate-100 relative overflow-hidden cursor-pointer"
+          onClick={() => onViewProfile && onViewProfile(user.uid)}
+        >
           <img 
             src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
@@ -365,7 +390,12 @@ const SuggestionCard = ({ user }: { user: UserProfile }) => (
         </div>
         <div className="p-4 space-y-3 flex-1 flex flex-col">
           <div className="space-y-1 flex-1">
-              <h3 className="font-bold text-[17px] text-slate-900 truncate leading-tight">{user.displayName}</h3>
+              <h3 
+                className="font-bold text-[17px] text-slate-900 truncate leading-tight cursor-pointer hover:underline"
+                onClick={() => onViewProfile && onViewProfile(user.uid)}
+              >
+                {user.displayName}
+              </h3>
               <p className="text-xs text-slate-500 font-medium">Suggested for you</p>
           </div>
           <div className="space-y-2 mt-auto">
