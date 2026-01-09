@@ -296,7 +296,7 @@ export const HelpPage: React.FC = () => {
                   </li>
                   <li>
                      <button 
-                        onClick={() => openQuickLink("Safety Center", "Your safety is our priority. Use 2FA, create a strong password, and never share your login credentials. Report suspicious activity immediately via the 'Report' button on posts or profiles.")}
+                        onClick={() => openQuickLink("Safety Center", "Your safety is our priority. Use a strong, unique password and never share your login credentials. Enable login alerts in Settings to be notified of unrecognized devices. Report suspicious activity immediately via the 'Report' button.")}
                         className="flex items-center gap-2 text-sm text-synapse-600 hover:underline font-medium w-full text-left"
                      >
                         <ExternalLink className="w-3.5 h-3.5" /> Safety Center
