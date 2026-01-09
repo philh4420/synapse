@@ -175,6 +175,17 @@ export const LandingPage: React.FC = () => {
     setSuccess('');
   };
 
+  // Helper for avatars display
+  const getDisplayAvatars = () => {
+    const avatars = [...recentAvatars];
+    // Fill with placeholders if less than 4 to maintain visual consistency
+    while (avatars.length < 4) {
+      // Deterministic seeds for stable rendering
+      avatars.push(`https://api.dicebear.com/9.x/avataaars/svg?seed=Synapse_Placeholder_${avatars.length}`);
+    }
+    return avatars.slice(0, 4);
+  };
+
   return (
     <div className="min-h-screen flex bg-slate-50 relative overflow-hidden font-sans selection:bg-synapse-200 selection:text-synapse-900">
       
@@ -222,7 +233,7 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-8 pt-8 border-t border-white/10">
              <div>
                 <p className="text-3xl font-bold text-white">
-                  {userCount > 0 ? userCount.toLocaleString() : '2.4M+'}
+                  {userCount.toLocaleString()}
                 </p>
                 <p className="text-sm text-slate-500 uppercase tracking-wider font-semibold">Active Minds</p>
              </div>
@@ -233,20 +244,11 @@ export const LandingPage: React.FC = () => {
              </div>
              <div className="h-10 w-px bg-white/10" />
              <div className="flex -space-x-4">
-                {recentAvatars.length > 0 ? (
-                  recentAvatars.map((url, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden">
-                       <img src={url} alt="User" className="w-full h-full object-cover" />
-                    </div>
-                  ))
-                ) : (
-                  // Fallback if stats doc empty or loading
-                  [1, 2, 3, 4].map((i) => (
-                    <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden">
-                       <img src={`https://i.pravatar.cc/100?img=${i + 10}`} alt="User" className="w-full h-full object-cover" />
-                    </div>
-                  ))
-                )}
+                {getDisplayAvatars().map((url, i) => (
+                  <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden">
+                     <img src={url} alt="User" className="w-full h-full object-cover" />
+                  </div>
+                ))}
              </div>
           </div>
         </div>
