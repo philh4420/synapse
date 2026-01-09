@@ -10,7 +10,6 @@ import { Button } from './ui/Button';
 import { FriendButton } from './FriendButton';
 import { Users, UserPlus, ChevronRight, Settings, Sparkles, UserSearch, Search, UserCheck } from 'lucide-react';
 import { Separator } from './ui/Separator';
-import { Input } from './ui/Input';
 import { cn } from '../lib/utils';
 
 interface FriendsPageProps {
@@ -74,16 +73,20 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
                 return;
             }
 
-            const chunk = validFriends.slice(0, 20); // Limit for demo
-            if (chunk.length > 0) {
-                const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
-                const snap = await getDocs(q);
-                const fetchedFriends: UserProfile[] = [];
-                snap.forEach(d => fetchedFriends.push(d.data() as UserProfile));
-                setFriends(fetchedFriends);
-            } else {
-                setFriends([]);
+            // Chunking for Firestore 'in' query limit (10)
+            const chunks = [];
+            for (let i = 0; i < validFriends.length; i += 10) {
+                chunks.push(validFriends.slice(i, i + 10));
             }
+
+            const promises = chunks.map(chunk => 
+                getDocs(query(collection(db, 'users'), where(documentId(), 'in', chunk)))
+            );
+
+            const snapshots = await Promise.all(promises);
+            const fetchedFriends = snapshots.flatMap(snap => snap.docs.map(d => d.data() as UserProfile));
+            setFriends(fetchedFriends);
+
         } catch (e) {
             console.error("Error fetching friends list", e);
         } finally {
@@ -98,7 +101,6 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
   useEffect(() => {
     const fetchSuggestions = async () => {
       if (!user) return;
-      // Fetch only if needed or on mount
       if (suggestions.length > 0 && view !== 'home' && view !== 'suggestions') return;
 
       setLoading(true);
@@ -107,7 +109,6 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
         excludeIds.add(user.uid);
         userProfile?.friends?.forEach(id => excludeIds.add(id));
 
-        // Basic exclusion of pending requests
         const qSent = query(collection(db, 'friend_requests'), where('senderId', '==', user.uid));
         const sentSnap = await getDocs(qSent);
         sentSnap.forEach(doc => excludeIds.add((doc.data() as any).receiverId));
@@ -135,7 +136,6 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
     fetchSuggestions();
   }, [user, userProfile, view]);
 
-  // Filter Friends
   const filteredFriends = friends.filter(f => 
     f.displayName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -188,7 +188,6 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
             
             <Separator className="bg-slate-200/60" />
 
-            {/* Mini Footer for Sidebar */}
             <div className="px-4 text-xs text-slate-400 leading-relaxed">
                <p>Friend requests and suggestions are based on mutual connections and profile information.</p>
             </div>
@@ -197,10 +196,10 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
          {/* --- Content Area --- */}
          <div className="flex-1 min-w-0 w-full">
             
-            {/* HOME VIEW (Aggregated) */}
+            {/* HOME VIEW */}
             {view === 'home' && (
                <div className="space-y-10">
-                  {/* Requests Section */}
+                  {/* Requests */}
                   {requests.length > 0 && (
                      <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -215,7 +214,7 @@ export const FriendsPage: React.FC<FriendsPageProps> = ({ onViewProfile }) => {
                      </div>
                   )}
 
-                  {/* Suggestions Section */}
+                  {/* Suggestions */}
                   <div className="space-y-4">
                      <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold text-slate-900">People You May Know</h2>
@@ -349,4 +348,51 @@ const FriendRequestCard = ({ req, onViewProfile }: { req: FriendRequest, onViewP
     <Card className="overflow-hidden border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl flex flex-col group bg-white">
       <div 
         className="aspect-square bg-slate-100 relative overflow-hidden cursor-pointer"
-        
+        onClick={() => onViewProfile && onViewProfile(req.senderId)}
+      >
+         <img src={req.sender?.photoURL || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
+         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60" />
+         <div className="absolute bottom-3 left-3 right-3">
+            <h3 className="font-bold text-white text-lg leading-tight truncate">{req.sender?.displayName}</h3>
+            <p className="text-slate-200 text-xs font-medium">Sent you a request</p>
+         </div>
+      </div>
+      <div className="p-3 bg-white mt-auto">
+         <FriendButton targetUid={req.senderId} className="w-full rounded-xl" />
+      </div>
+    </Card>
+);
+
+const SuggestionCard = ({ user, onViewProfile }: { user: UserProfile, onViewProfile?: (uid: string) => void }) => (
+    <Card className="overflow-hidden border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl flex flex-col group bg-white">
+      <div 
+        className="aspect-square bg-slate-100 relative overflow-hidden cursor-pointer"
+        onClick={() => onViewProfile && onViewProfile(user.uid)}
+      >
+         <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="" />
+      </div>
+      <div className="p-4 flex flex-col flex-1">
+         <h3 
+            className="font-bold text-slate-900 text-[17px] leading-tight mb-1 truncate cursor-pointer hover:underline"
+            onClick={() => onViewProfile && onViewProfile(user.uid)}
+         >
+            {user.displayName}
+         </h3>
+         <p className="text-xs text-slate-500 mb-4 line-clamp-1">Suggested for you</p>
+         <div className="mt-auto">
+            <FriendButton targetUid={user.uid} className="w-full rounded-xl" />
+         </div>
+      </div>
+    </Card>
+);
+
+const EmptyState = ({ icon: Icon, title, desc, action }: { icon: any, title: string, desc: string, action?: React.ReactNode }) => (
+    <div className="flex flex-col items-center justify-center py-20 bg-white rounded-[2rem] border border-dashed border-slate-200 text-center px-4">
+        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+            <Icon className="w-10 h-10 text-slate-300" />
+        </div>
+        <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
+        <p className="text-slate-500 max-w-sm mx-auto mb-6">{desc}</p>
+        {action}
+    </div>
+);
