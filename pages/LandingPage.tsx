@@ -14,15 +14,10 @@ import {
   getDocs, 
   query, 
   limit,
-  onSnapshot,
-  getDoc,
-  updateDoc,
-  increment,
-  orderBy
+  onSnapshot
 } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { Mail, Lock, User as UserIcon, ArrowRight, Activity, ArrowLeft, AlertCircle, Info, Megaphone, AlertTriangle, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SiteSettings } from '../types';
@@ -30,6 +25,18 @@ import { cn } from '../lib/utils';
 
 // Default Assets
 const DEFAULT_COVER_URL = "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop";
+
+// --- CONFIGURATION ---
+// Update this number manually as you grow during the beta/pre-release phase.
+// For full release, you can replace this with a fetch from a public Firestore document.
+const EARLY_ADOPTERS_COUNT = 1; 
+
+const DEMO_AVATARS = [
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Aneka",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Mark",
+  "https://api.dicebear.com/9.x/avataaars/svg?seed=Sophie"
+];
 
 export const LandingPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -43,14 +50,10 @@ export const LandingPage: React.FC = () => {
   const [signupEnabled, setSignupEnabled] = useState(true);
   const [announcement, setAnnouncement] = useState<SiteSettings['announcement']>(undefined);
   
-  // Real Data Stats
-  const [userCount, setUserCount] = useState(0);
-  const [recentAvatars, setRecentAvatars] = useState<string[]>([]);
-
   const { refreshProfile } = useAuth();
 
   useEffect(() => {
-    // 1. Settings Listener
+    // Settings Listener
     const unsubSettings = onSnapshot(doc(db, 'settings', 'site'), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as SiteSettings;
@@ -61,22 +64,8 @@ export const LandingPage: React.FC = () => {
       console.warn("Settings listener warning:", err.code);
     });
 
-    // 2. Stats Listener (Public Document)
-    const unsubStats = onSnapshot(doc(db, 'stats', 'public'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data() as any;
-        if (typeof data.userCount === 'number') setUserCount(data.userCount);
-        if (Array.isArray(data.recentAvatars)) setRecentAvatars(data.recentAvatars);
-      } else {
-        // Default state if stats doc hasn't been created yet
-        setUserCount(0);
-        setRecentAvatars([]);
-      }
-    });
-
     return () => {
       unsubSettings();
-      unsubStats();
     };
   }, []);
 
@@ -124,33 +113,6 @@ export const LandingPage: React.FC = () => {
           createdAt: serverTimestamp()
         });
 
-        // Update Public Stats (Client-side increment logic)
-        try {
-           const statsRef = doc(db, 'stats', 'public');
-           const statsSnap = await getDoc(statsRef);
-           
-           if (statsSnap.exists()) {
-              const currentData = statsSnap.data() as any;
-              const currentAvatars = currentData.recentAvatars || [];
-              // Prepend new avatar, keep max 4
-              const newAvatars = [photoURL, ...currentAvatars].slice(0, 4);
-              
-              await updateDoc(statsRef, {
-                 userCount: increment(1),
-                 recentAvatars: newAvatars
-              });
-           } else {
-              // Initialize if not exists
-              await setDoc(statsRef, {
-                 userCount: 1,
-                 recentAvatars: [photoURL]
-              });
-           }
-        } catch (e) {
-           console.error("Failed to update stats", e);
-           // Silent fail for stats update, don't block user flow
-        }
-
         // Update Auth Profile
         await updateProfile(user, {
           displayName: name,
@@ -175,16 +137,6 @@ export const LandingPage: React.FC = () => {
     }
     setError('');
     setSuccess('');
-  };
-
-  // Helper for avatars display
-  const getDisplayAvatars = () => {
-    const avatars = [...recentAvatars];
-    // Fill with placeholders if less than 4 to maintain visual consistency
-    while (avatars.length < 4) {
-      avatars.push(`https://api.dicebear.com/9.x/avataaars/svg?seed=Synapse_Placeholder_${avatars.length}`);
-    }
-    return avatars.slice(0, 4);
   };
 
   return (
@@ -234,9 +186,9 @@ export const LandingPage: React.FC = () => {
           <div className="flex items-center gap-8 pt-8 border-t border-white/10">
              <div>
                 <p className="text-3xl font-bold text-white">
-                  {userCount.toLocaleString()}
+                  {EARLY_ADOPTERS_COUNT.toLocaleString()}
                 </p>
-                <p className="text-sm text-slate-500 uppercase tracking-wider font-semibold">Active Minds</p>
+                <p className="text-sm text-slate-500 uppercase tracking-wider font-semibold">Early Adopters</p>
              </div>
              <div className="h-10 w-px bg-white/10" />
              <div>
@@ -245,8 +197,8 @@ export const LandingPage: React.FC = () => {
              </div>
              <div className="h-10 w-px bg-white/10" />
              <div className="flex -space-x-4">
-                {getDisplayAvatars().map((url, i) => (
-                  <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden">
+                {DEMO_AVATARS.map((url, i) => (
+                  <div key={i} className="w-10 h-10 rounded-full border-2 border-[#0a0a0a] bg-slate-800 overflow-hidden shadow-lg">
                      <img src={url} alt="User" className="w-full h-full object-cover" />
                   </div>
                 ))}
