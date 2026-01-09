@@ -40,7 +40,27 @@
   background-color: #475569;
 }
 
-/* Animations */
+/* Custom Keyframe Animations (Replacing tailwindcss-animate) */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideRightFade {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideLeftFade {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes gradient-x {
   0%, 100% {
     background-size: 200% 200%;
@@ -51,21 +71,42 @@
     background-position: right center;
   }
 }
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Utility Classes for Animations */
+.animate-fade-in {
+  animation: fadeIn 0.7s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUpFade 0.7s ease-out forwards;
+}
+
+.animate-slide-right {
+  animation: slideRightFade 0.7s ease-out forwards;
+}
+
+.animate-slide-left {
+  animation: slideLeftFade 0.7s ease-out forwards;
+}
+
 .animate-gradient-x {
   animation: gradient-x 15s ease infinite;
 }
 
-@keyframes spin-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 .animate-spin-slow {
   animation: spin-slow 3s linear infinite;
 }
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-700 { animation-delay: 700ms; }
 
 /* Utilities */
 .glass-panel {
@@ -148,12 +189,23 @@ body {
 .dark .bg-white\/90 { background-color: rgba(30, 41, 59, 0.95) !important; }
 .dark .bg-white\/95 { background-color: rgba(30, 41, 59, 0.98) !important; }
 .dark .border-slate-100, .dark .border-slate-200, .dark .border-white\/40, .dark .border-white\/50, .dark .border-white\/60 { border-color: #334155 !important; }
-.dark .text-slate-900, .dark .text-slate-800, .dark .text-slate-700 { color: #f1f5f9 !important; }
+
+/* Improved Text Colors for Dark Mode */
+.dark .text-slate-900, .dark .text-slate-800, .dark .text-slate-700 { color: #f8fafc !important; }
 .dark .text-slate-600 { color: #cbd5e1 !important; }
 .dark .text-slate-500 { color: #94a3b8 !important; }
-.dark .text-slate-400 { color: #64748b !important; }
-.dark input, .dark textarea, .dark select { background-color: #0f172a !important; color: #f8fafc !important; border-color: #334155 !important; }
-.dark input::placeholder, .dark textarea::placeholder { color: #64748b !important; }
+.dark .text-slate-400 { color: #cbd5e1 !important; } /* Lightened from previous #64748b */
+
+/* Input Fields Dark Mode Contrast Fix */
+.dark input, .dark textarea, .dark select { 
+  background-color: #020617 !important; 
+  color: #ffffff !important; 
+  border-color: #334155 !important; 
+}
+.dark input::placeholder, .dark textarea::placeholder { 
+  color: #94a3b8 !important; /* Brighter placeholder */
+}
+
 .dark .shadow-sm, .dark .shadow-md, .dark .shadow-lg { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15) !important; }
 
 .light .bg-white { background-color: #ffffff !important; color: #0f172a !important; }

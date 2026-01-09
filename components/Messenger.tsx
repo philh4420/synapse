@@ -79,7 +79,8 @@ export const Messenger: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Fix: Use ReturnType<typeof setTimeout> instead of NodeJS.Timeout to avoid missing type definition
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 1. Fetch Chats List
   useEffect(() => {

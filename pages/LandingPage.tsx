@@ -144,7 +144,7 @@ export const LandingPage: React.FC = () => {
       {announcement?.enabled && (
         <div className="absolute top-0 left-0 right-0 z-[60] flex justify-center p-4 pointer-events-none">
             <div className={cn(
-              "pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/20 text-white max-w-xl w-full animate-in slide-in-from-top-4 duration-700 ease-out ring-1 ring-black/5",
+              "pointer-events-auto flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border border-white/20 text-white max-w-xl w-full animate-slide-up duration-700 ease-out ring-1 ring-black/5",
               announcement.type === 'error' ? "bg-rose-600/90" : 
               announcement.type === 'warning' ? "bg-amber-500/90" : 
               "bg-synapse-600/90"
@@ -160,11 +160,12 @@ export const LandingPage: React.FC = () => {
       )}
 
       {/* --- LOGO (Top Left) --- */}
-      <div className="absolute top-6 left-6 z-50 flex items-center gap-3 animate-in fade-in slide-in-from-left-4 duration-1000">
+      <div className="absolute top-6 left-6 z-50 flex items-center gap-3 animate-fade-in animate-slide-right">
          <div className="w-12 h-12 bg-synapse-600 rounded-full flex items-center justify-center shadow-lg shadow-synapse-500/40 hover:scale-105 transition-transform">
             <Activity className="text-white w-7 h-7 stroke-[3px]" />
          </div>
-         <span className="text-2xl font-black text-white lg:text-slate-900 tracking-tight drop-shadow-md lg:drop-shadow-none hidden sm:block">Synapse</span>
+         {/* Fixed text-white to ensure visibility on dark desktop panel */}
+         <span className="text-2xl font-black text-white tracking-tight drop-shadow-md hidden sm:block">Synapse</span>
       </div>
 
       {/* Left Side - Brand / Visual */}
@@ -174,7 +175,7 @@ export const LandingPage: React.FC = () => {
         <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[100px] animate-pulse delay-1000" />
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
 
-        <div className="relative z-10 max-w-2xl animate-in slide-in-from-bottom-10 fade-in duration-1000 fill-mode-both">
+        <div className="relative z-10 max-w-2xl animate-slide-up animate-fade-in delay-200">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-xs font-bold text-synapse-300 uppercase tracking-widest mb-8 shadow-2xl">
              <Sparkles className="w-3 h-3" /> The Future of Social
           </div>
@@ -239,7 +240,7 @@ export const LandingPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="w-full max-w-[420px] space-y-8 z-10 animate-in slide-in-from-right-8 fade-in duration-700 fill-mode-both">
+        <div className="w-full max-w-[420px] space-y-8 z-10 animate-slide-left animate-fade-in">
           <div className="text-center lg:text-left">
             <div className="lg:hidden flex justify-center mb-8">
                <div className="w-16 h-16 bg-synapse-600 rounded-full flex items-center justify-center shadow-lg shadow-synapse-500/40">
@@ -298,8 +299,8 @@ export const LandingPage: React.FC = () => {
               </div>
             )}
 
-            {error && <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium animate-in slide-in-from-top-1 flex items-start gap-2"><AlertTriangle className="w-5 h-5 shrink-0" /> {error}</div>}
-            {success && <div className="p-4 rounded-2xl bg-green-50 border border-green-100 text-green-700 text-sm font-medium animate-in slide-in-from-top-1 flex items-start gap-2"><Info className="w-5 h-5 shrink-0" /> {success}</div>}
+            {error && <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-medium animate-slide-up flex items-start gap-2"><AlertTriangle className="w-5 h-5 shrink-0" /> {error}</div>}
+            {success && <div className="p-4 rounded-2xl bg-green-50 border border-green-100 text-green-700 text-sm font-medium animate-slide-up flex items-start gap-2"><Info className="w-5 h-5 shrink-0" /> {success}</div>}
 
             <Button type="submit" className="w-full h-14 rounded-2xl text-lg font-bold shadow-xl shadow-synapse-500/25 bg-gradient-to-r from-synapse-600 to-indigo-600 hover:from-synapse-700 hover:to-indigo-700 transition-all transform hover:scale-[1.02] active:scale-[0.98]" isLoading={loading} disabled={!isLogin && !signupEnabled && !isReset}>
               {isReset ? "Send Reset Link" : (isLogin ? "Sign In" : "Create Account")}
