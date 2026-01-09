@@ -39,9 +39,6 @@ export const Messenger: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // If not open, don't render anything
-  if (!isOpen) return null;
-
   // 1. Fetch Chats List
   useEffect(() => {
     if (!user) return;
@@ -271,6 +268,9 @@ export const Messenger: React.FC = () => {
 
   const activeChatData = chats.find(c => c.id === activeChatId);
   const activeChatPartner = activeChatData ? getOtherParticipant(activeChatData) : null;
+
+  // Don't render anything if closed (but keeping hooks valid)
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col md:inset-auto md:bottom-0 md:right-8 md:w-[900px] md:h-[650px] bg-white dark:bg-slate-900 md:rounded-t-2xl md:shadow-2xl border border-b-0 border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom-10 md:flex-row overflow-hidden font-sans">
