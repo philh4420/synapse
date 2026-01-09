@@ -7,6 +7,7 @@ import {
   Ticket
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useMessenger } from '../context/MessengerContext'; // Import Context
 import { collection, query, where, limit, onSnapshot, orderBy, updateDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { UserProfile, Notification } from '../types';
@@ -55,6 +56,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const { user, userProfile, logout } = useAuth();
+  const { isOpen, toggleMessenger, closeChat } = useMessenger(); // Use Context
   
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -428,10 +430,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             </PopoverContent>
           </Popover>
 
-          {/* Messenger Popover (Updated with Full Component) */}
-          <Popover>
+          {/* Messenger Popover (Updated: Controlled via Context) */}
+          <Popover open={isOpen} onOpenChange={(open) => !open && closeChat()}>
             <PopoverTrigger asChild>
-               <Button variant="ghost" size="icon" className="rounded-full bg-slate-100/50 hover:bg-synapse-50 dark:bg-slate-800/50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-synapse-600 h-10 w-10 transition-colors">
+               <Button onClick={toggleMessenger} variant="ghost" size="icon" className="rounded-full bg-slate-100/50 hover:bg-synapse-50 dark:bg-slate-800/50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-synapse-600 h-10 w-10 transition-colors">
                   <MessageCircle className="w-5 h-5" />
                </Button>
             </PopoverTrigger>

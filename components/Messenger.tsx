@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Send, MoreHorizontal, Edit, Search, ArrowLeft, 
   Smile, Image as ImageIcon, Phone, Video, Info, Check, CheckCheck 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useMessenger } from '../context/MessengerContext'; // Import Context
 import { 
   collection, query, where, orderBy, onSnapshot, 
   addDoc, serverTimestamp, updateDoc, doc, limit, getDocs, setDoc, getDoc, documentId
@@ -17,6 +19,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 export const Messenger: React.FC = () => {
   const { user, userProfile } = useAuth();
+  const { activeUserId } = useMessenger(); // Use Context
   
   // State
   const [chats, setChats] = useState<Chat[]>([]);
@@ -51,6 +54,43 @@ export const Messenger: React.FC = () => {
 
     return () => unsubscribe();
   }, [user]);
+
+  // Handle activeUserId from Context (Profile Button Click)
+  useEffect(() => {
+    if (activeUserId && chats.length > 0) {
+      const existingChat = chats.find(c => c.participants.includes(activeUserId));
+      if (existingChat) {
+        setActiveChatId(existingChat.id);
+        setIsNewChat(false);
+      } else {
+        // If chat doesn't exist, we ideally fetch user details and start a new chat
+        // For now, let's switch to New Chat mode and try to pre-select if possible
+        // Or create it immediately if we have the profile data (requires fetching)
+        const createImmediate = async () => {
+           try {
+             const userDoc = await getDoc(doc(db, 'users', activeUserId));
+             if (userDoc.exists()) {
+                const targetUser = userDoc.data() as UserProfile;
+                await startChat(targetUser);
+             }
+           } catch(e) { console.error("Error starting chat from context", e); }
+        };
+        createImmediate();
+      }
+    } else if (activeUserId && chats.length === 0 && !loadingChats) {
+       // Similar logic if no chats exist yet
+        const createImmediate = async () => {
+           try {
+             const userDoc = await getDoc(doc(db, 'users', activeUserId));
+             if (userDoc.exists()) {
+                const targetUser = userDoc.data() as UserProfile;
+                await startChat(targetUser);
+             }
+           } catch(e) { console.error("Error starting chat from context", e); }
+        };
+        createImmediate();
+    }
+  }, [activeUserId, chats, loadingChats]);
 
   // 2. Fetch Messages for Active Chat
   useEffect(() => {

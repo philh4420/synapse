@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useMessenger } from '../context/MessengerContext'; // Import Context
 import { Post as PostComponent } from './Post';
 import { CreatePost } from './CreatePost';
 import { Post as PostType, UserProfile } from '../types';
@@ -28,6 +29,7 @@ interface ProfileProps {
 
 export const Profile: React.FC<ProfileProps> = ({ targetUid, onViewProfile }) => {
   const { userProfile: currentUserProfile, user } = useAuth();
+  const { openChat } = useMessenger(); // Hook
   
   const [externalProfile, setExternalProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<PostType[]>([]);
@@ -615,6 +617,7 @@ export const Profile: React.FC<ProfileProps> = ({ targetUid, onViewProfile }) =>
                            <FriendButton targetUid={viewedProfile.uid} className="h-11 px-6 rounded-xl" />
                            <Button 
                               variant="secondary"
+                              onClick={() => openChat(viewedProfile.uid)}
                               className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl px-6 font-bold h-11"
                            >
                               <MessageCircle className="w-5 h-5 mr-2" /> Message
