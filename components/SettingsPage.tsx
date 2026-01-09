@@ -188,11 +188,17 @@ export const SettingsPage: React.FC = () => {
         // Delete Auth User
         await deleteUser(user);
         
-        toast("Account deleted.", "info");
-        // Auth state listener in App.tsx will handle redirect
+        // We use 'info' or 'success' type for toast. Since user is being logged out/deleted,
+        // the toast needs to appear in the context of the App which persists.
+        toast("Account permanently deleted. Goodbye.", "info");
+        // Auth state listener in App.tsx will handle redirect to Landing
      } catch (e: any) {
         console.error(e);
-        toast("Failed to delete account: " + e.message, "error");
+        if (e.code === 'auth/wrong-password') {
+           toast("Incorrect password. Cannot delete account.", "error");
+        } else {
+           toast("Failed to delete account: " + e.message, "error");
+        }
         setLoading(false);
      }
   };
