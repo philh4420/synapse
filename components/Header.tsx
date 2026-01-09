@@ -251,7 +251,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   };
 
   return (
-    <div className="fixed top-0 lg:top-4 left-0 lg:left-1/2 lg:-translate-x-1/2 w-full lg:w-[96%] max-w-[1920px] h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b lg:border border-white/40 dark:border-white/5 shadow-sm lg:shadow-lg lg:shadow-black/5 lg:rounded-2xl z-50 flex items-center justify-between px-4 select-none transition-all duration-300">
+    <div className="fixed top-0 lg:top-4 left-0 lg:left-1/2 lg:-translate-x-1/2 w-full lg:w-[96%] max-w-[1920px] h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b lg:border border-slate-200 dark:border-white/5 shadow-sm lg:shadow-lg lg:shadow-black/5 lg:rounded-2xl z-50 flex items-center justify-between px-4 select-none transition-all duration-300">
       
       {/* --- Left: Logo & Search --- */}
       <div className="flex items-center gap-3 z-50 relative">

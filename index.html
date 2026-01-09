@@ -66,6 +66,9 @@
         --radius-md: calc(var(--radius) - 2px);
         --radius-sm: calc(var(--radius) - 4px);
       }
+
+      /* Force class-based dark mode instead of system preference */
+      @variant dark (&:where(.dark, .dark *));
     </style>
     
     <script type="importmap">
