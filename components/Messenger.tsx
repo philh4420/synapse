@@ -3,13 +3,14 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Send, MoreHorizontal, Edit, Search, ArrowLeft, 
   Smile, Image as ImageIcon, Phone, Video, Info, X, Bell, Ban, ThumbsUp,
-  ChevronDown
+  ChevronDown, Flag, UserX, UserCheck, ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMessenger } from '../context/MessengerContext';
+import { useToast } from '../context/ToastContext';
 import { 
   collection, query, where, orderBy, onSnapshot, 
-  addDoc, serverTimestamp, updateDoc, doc, limit, getDocs, documentId
+  addDoc, serverTimestamp, updateDoc, doc, limit, getDocs, documentId, arrayUnion, arrayRemove
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { Chat, Message, UserProfile } from '../types';
@@ -22,6 +23,7 @@ import { uploadToCloudinary } from '../utils/upload';
 export const Messenger: React.FC = () => {
   const { user, userProfile } = useAuth();
   const { isOpen, closeChat, activeUserId } = useMessenger();
+  const { toast } = useToast();
   
   // State
   const [chats, setChats] = useState<Chat[]>([]);
@@ -33,6 +35,9 @@ export const Messenger: React.FC = () => {
   const [friendSearch, setFriendSearch] = useState('');
   const [loadingChats, setLoadingChats] = useState(true);
   const [showChatInfo, setShowChatInfo] = useState(false);
+  
+  // Real-time Partner Info
+  const [partnerProfile, setPartnerProfile] = useState<UserProfile | null>(null);
   
   // Uploading
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +72,6 @@ export const Messenger: React.FC = () => {
   }, [user]);
 
   // 2. Deduplicate Chats for Display
-  // This handles cases where multiple chats might exist for the same pair due to previous bugs
   const uniqueChats = useMemo(() => {
     const seen = new Set();
     return chats.filter(chat => {
@@ -79,17 +83,21 @@ export const Messenger: React.FC = () => {
     });
   }, [chats, user]);
 
-  // 3. Fetch Messages for Active Chat
+  // 3. Fetch Messages & Partner Profile for Active Chat
   useEffect(() => {
-    if (!activeChatId) return;
+    if (!activeChatId || !user) {
+        setPartnerProfile(null);
+        return;
+    }
 
-    const q = query(
+    // Messages Listener
+    const qMsgs = query(
       collection(db, 'chats', activeChatId, 'messages'),
       orderBy('timestamp', 'asc'),
       limit(50)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubMsgs = onSnapshot(qMsgs, (snapshot) => {
       const msgs = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -100,15 +108,32 @@ export const Messenger: React.FC = () => {
       }, 100);
     });
 
-    return () => unsubscribe();
-  }, [activeChatId]);
+    // Partner Profile Listener (for Real-time Online Status)
+    const activeChat = chats.find(c => c.id === activeChatId);
+    let unsubProfile = () => {};
+    
+    if (activeChat) {
+        const partnerId = activeChat.participants.find(p => p !== user.uid);
+        if (partnerId) {
+            unsubProfile = onSnapshot(doc(db, 'users', partnerId), (docSnap) => {
+                if (docSnap.exists()) {
+                    setPartnerProfile(docSnap.data() as UserProfile);
+                }
+            });
+        }
+    }
+
+    return () => {
+        unsubMsgs();
+        unsubProfile();
+    };
+  }, [activeChatId, chats, user]);
 
   // 4. Mark as Read Logic
   useEffect(() => {
     if (!activeChatId || !user) return;
 
     const activeChat = chats.find(c => c.id === activeChatId);
-    // Mark read if last message exists, is unread, AND sender is NOT me
     if (activeChat && activeChat.lastMessage && !activeChat.lastMessage.read && activeChat.lastMessage.senderId !== user.uid) {
        const chatDocRef = doc(db, 'chats', activeChatId);
        updateDoc(chatDocRef, {
@@ -124,7 +149,6 @@ export const Messenger: React.FC = () => {
     if (!activeUserId || handledUserIdRef.current === activeUserId || loadingChats) return;
 
     const handleOpen = async () => {
-        // Check loaded chats first
         const existingChat = chats.find(c => c.participants.includes(activeUserId));
         
         if (existingChat) {
@@ -132,7 +156,6 @@ export const Messenger: React.FC = () => {
             setIsNewChat(false);
             handledUserIdRef.current = activeUserId;
         } else {
-            // Try to create/fetch
             try {
                 const userDoc = await getDocs(query(collection(db, 'users'), where(documentId(), '==', activeUserId)));
                 if (!userDoc.empty) {
@@ -157,7 +180,6 @@ export const Messenger: React.FC = () => {
     if (isNewChat && userProfile?.friends) {
       const fetchFriends = async () => {
         if (!userProfile.friends || userProfile.friends.length === 0) return;
-        
         const friendIds = userProfile.friends.filter(Boolean).slice(0, 20); 
         if (friendIds.length === 0) return;
 
@@ -172,22 +194,57 @@ export const Messenger: React.FC = () => {
            const snapshots = await Promise.all(promises);
            const fetchedFriends = snapshots.flatMap(s => s.docs.map(d => d.data() as UserProfile));
            setFriends(fetchedFriends);
-        } catch (e) {
-           console.error(e);
-        }
+        } catch (e) { console.error(e); }
       };
       fetchFriends();
     }
   }, [isNewChat, userProfile]);
 
+  // --- Handlers ---
+
+  const handleCall = () => {
+      toast("Feature coming soon", "info");
+  };
+
+  const handleBlockUser = async () => {
+      if (!user || !partnerProfile) return;
+      const isBlocked = userProfile?.blockedUsers?.includes(partnerProfile.uid);
+      
+      try {
+          const userRef = doc(db, 'users', user.uid);
+          if (isBlocked) {
+              await updateDoc(userRef, { blockedUsers: arrayRemove(partnerProfile.uid) });
+              toast(`${partnerProfile.displayName} unblocked`, "success");
+          } else {
+              await updateDoc(userRef, { blockedUsers: arrayUnion(partnerProfile.uid) });
+              toast(`${partnerProfile.displayName} blocked`, "error");
+          }
+      } catch (e) {
+          toast("Failed to update block status", "error");
+      }
+  };
+
+  const handleReportUser = async () => {
+      if (!user || !partnerProfile) return;
+      try {
+          await addDoc(collection(db, 'reports'), {
+              reporterId: user.uid,
+              targetId: partnerProfile.uid,
+              type: 'user',
+              timestamp: serverTimestamp(),
+              status: 'pending'
+          });
+          toast("User reported. Thank you for keeping Synapse safe.", "success");
+      } catch (e) {
+          toast("Failed to report user", "error");
+      }
+  };
+
   const startChat = async (friend: UserProfile) => {
     if (!user || !userProfile) return;
 
-    // 1. Check local state (fastest)
     let targetChat = chats.find(c => c.participants.includes(friend.uid));
 
-    // 2. If not found locally, double check Firestore to prevent duplicates
-    // This is critical when coming from a profile page click before Messenger loaded
     if (!targetChat) {
        try {
          const q = query(
@@ -210,7 +267,6 @@ export const Messenger: React.FC = () => {
       setActiveChatId(targetChat.id);
       setIsNewChat(false);
     } else {
-      // Create new chat
       try {
         const participantData = {
           [user.uid]: { displayName: userProfile.displayName || 'User', photoURL: userProfile.photoURL || '' },
@@ -265,6 +321,12 @@ export const Messenger: React.FC = () => {
     e.preventDefault();
     if (!newMessage.trim() || !activeChatId || !user) return;
 
+    // Check Block Status
+    if (partnerProfile && userProfile?.blockedUsers?.includes(partnerProfile.uid)) {
+        toast("You have blocked this user. Unblock to send messages.", "error");
+        return;
+    }
+
     const text = newMessage;
     setNewMessage('');
 
@@ -304,6 +366,15 @@ export const Messenger: React.FC = () => {
 
   const activeChatData = chats.find(c => c.id === activeChatId);
   const activeChatPartner = activeChatData ? getOtherParticipant(activeChatData) : null;
+  
+  // Real-time status logic
+  const isOnline = partnerProfile?.isOnline;
+  const lastSeenText = partnerProfile?.lastSeen 
+    ? `Active ${formatDistanceToNow(partnerProfile.lastSeen.toDate ? partnerProfile.lastSeen.toDate() : new Date(), { addSuffix: true })}` 
+    : 'Offline';
+  const statusText = isOnline ? 'Active now' : lastSeenText;
+  
+  const isBlockedByMe = partnerProfile && userProfile?.blockedUsers?.includes(partnerProfile.uid);
 
   if (!isOpen) return null;
 
@@ -388,6 +459,7 @@ export const Messenger: React.FC = () => {
                              <AvatarImage src={other.photoURL} />
                              <AvatarFallback>{other.displayName[0]}</AvatarFallback>
                           </Avatar>
+                          {/* We don't show real-time status in the list to save reads, just active chat */}
                           <div className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
                        </div>
                        <div className="flex-1 min-w-0 pr-4">
@@ -446,20 +518,25 @@ export const Messenger: React.FC = () => {
                                  <AvatarImage src={activeChatPartner.photoURL} />
                                  <AvatarFallback>U</AvatarFallback>
                               </Avatar>
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+                              {/* Real-time Indicator */}
+                              {isOnline && (
+                                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full" />
+                              )}
                            </div>
                            <div>
                               <h3 className="font-bold text-slate-900 dark:text-slate-100 text-[15px] leading-tight">
                                  {activeChatPartner.displayName}
                               </h3>
-                              <p className="text-[12px] text-slate-500 dark:text-slate-400">Active now</p>
+                              <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                                {partnerProfile ? statusText : 'Loading...'}
+                              </p>
                            </div>
                         </div>
                      )}
                   </div>
                   <div className="flex gap-1 text-synapse-600 dark:text-synapse-400">
-                     <Button variant="ghost" size="icon" className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Phone className="w-5 h-5" /></Button>
-                     <Button variant="ghost" size="icon" className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Video className="w-5 h-5" /></Button>
+                     <Button variant="ghost" size="icon" onClick={handleCall} className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Phone className="w-5 h-5" /></Button>
+                     <Button variant="ghost" size="icon" onClick={handleCall} className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800"><Video className="w-5 h-5" /></Button>
                      <Button variant="ghost" size="icon" className="rounded-full text-synapse-600 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setShowChatInfo(!showChatInfo)}>
                         <Info className={cn("w-5 h-5", showChatInfo && "fill-current")} />
                      </Button>
@@ -553,34 +630,40 @@ export const Messenger: React.FC = () => {
 
                {/* Input */}
                <div className="p-3 bg-white dark:bg-slate-900">
-                  <form onSubmit={sendMessage} className="flex items-end gap-2">
-                     <div className="flex gap-1 mb-2">
-                        <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MoreHorizontal className="w-5 h-5" /></Button>
-                        <Button type="button" onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 relative">
-                           {isUploading ? <div className="w-4 h-4 border-2 border-synapse-600 border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-5 h-5" />}
-                        </Button>
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-                        <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800"><Smile className="w-5 h-5" /></Button>
-                     </div>
-                     <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center px-4 py-2 mb-1">
-                        <input 
-                           value={newMessage} 
-                           onChange={(e) => setNewMessage(e.target.value)}
-                           className="bg-transparent w-full focus:outline-none text-[15px] dark:text-slate-100 placeholder:text-slate-500"
-                           placeholder="Type a message..."
-                        />
-                        <button type="button" className="text-slate-400 hover:text-slate-600"><Smile className="w-5 h-5" /></button>
-                     </div>
-                     {newMessage.trim() ? (
-                        <Button type="submit" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 mb-1">
-                           <Send className="w-5 h-5 fill-current" />
-                        </Button>
-                     ) : (
-                        <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 mb-1">
-                           <ThumbsUp className="w-5 h-5 fill-current" />
-                        </Button>
-                     )}
-                  </form>
+                  {isBlockedByMe ? (
+                      <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-sm">
+                          <p>You have blocked this user. Unblock to send messages.</p>
+                      </div>
+                  ) : (
+                    <form onSubmit={sendMessage} className="flex items-end gap-2">
+                        <div className="flex gap-1 mb-2">
+                            <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800"><MoreHorizontal className="w-5 h-5" /></Button>
+                            <Button type="button" onClick={() => fileInputRef.current?.click()} variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 relative">
+                            {isUploading ? <div className="w-4 h-4 border-2 border-synapse-600 border-t-transparent rounded-full animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+                            </Button>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
+                            <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800"><Smile className="w-5 h-5" /></Button>
+                        </div>
+                        <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-3xl flex items-center px-4 py-2 mb-1">
+                            <input 
+                            value={newMessage} 
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            className="bg-transparent w-full focus:outline-none text-[15px] dark:text-slate-100 placeholder:text-slate-500"
+                            placeholder="Type a message..."
+                            />
+                            <button type="button" className="text-slate-400 hover:text-slate-600"><Smile className="w-5 h-5" /></button>
+                        </div>
+                        {newMessage.trim() ? (
+                            <Button type="submit" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 mb-1">
+                            <Send className="w-5 h-5 fill-current" />
+                            </Button>
+                        ) : (
+                            <Button type="button" variant="ghost" size="icon" className="rounded-full text-synapse-600 dark:text-synapse-400 hover:bg-slate-100 dark:hover:bg-slate-800 mb-1">
+                            <ThumbsUp className="w-5 h-5 fill-current" />
+                            </Button>
+                        )}
+                    </form>
+                  )}
                </div>
             </>
          ) : (
@@ -613,7 +696,9 @@ export const Messenger: React.FC = () => {
                   <AvatarFallback>U</AvatarFallback>
                </Avatar>
                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{activeChatPartner?.displayName}</h3>
-               <p className="text-xs text-slate-500">Active now</p>
+               <p className="text-xs text-slate-500">
+                  {partnerProfile ? (isOnline ? 'Active now' : 'Offline') : 'Active now'}
+               </p>
                
                <div className="flex gap-4 mt-6">
                   <div className="flex flex-col items-center gap-1 cursor-pointer group">
@@ -651,11 +736,20 @@ export const Messenger: React.FC = () => {
                </AccordionItem>
                <AccordionItem title="Privacy & Support">
                   <div className="space-y-2">
-                     <button className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:bg-slate-50 w-full p-2 rounded-lg transition-colors">
-                        <Ban className="w-4 h-4" /> Block
+                     <button 
+                        onClick={handleBlockUser}
+                        className={cn(
+                            "flex items-center gap-2 text-sm font-medium w-full p-2 rounded-lg transition-colors",
+                            isBlockedByMe ? "text-slate-600 hover:bg-slate-50" : "text-red-600 hover:bg-red-50"
+                        )}
+                     >
+                        {isBlockedByMe ? <><UserCheck className="w-4 h-4" /> Unblock User</> : <><UserX className="w-4 h-4" /> Block User</>}
                      </button>
-                     <button className="flex items-center gap-2 text-sm font-medium text-red-600 hover:bg-red-50 w-full p-2 rounded-lg transition-colors">
-                        <Video className="w-4 h-4" /> Report
+                     <button 
+                        onClick={handleReportUser}
+                        className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:bg-slate-50 w-full p-2 rounded-lg transition-colors"
+                     >
+                        <Flag className="w-4 h-4" /> Report
                      </button>
                   </div>
                </AccordionItem>

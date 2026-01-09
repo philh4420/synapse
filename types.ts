@@ -39,6 +39,11 @@ export interface UserProfile {
   savedPosts?: string[]; // Array of Post IDs
   birthDate?: string; // ISO Date string YYYY-MM-DD
   
+  // Real-time Status & Privacy
+  isOnline?: boolean;
+  lastSeen?: any;
+  blockedUsers?: string[]; // Array of UIDs blocked by this user
+
   // Extended Details
   work?: string; // Company
   position?: string; // Job Title

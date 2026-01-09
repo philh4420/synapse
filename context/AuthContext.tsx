@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { UserProfile } from '../types';
 
@@ -52,6 +52,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error("Auth Profile Listener Error:", error);
           setLoading(false);
         });
+
+        // --- PRESENCE SYSTEM ---
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        
+        // Set online on connect
+        updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(console.error);
+
+        // Handle visibility change
+        const handleVisibilityChange = () => {
+           if (document.visibilityState === 'hidden') {
+               updateDoc(userRef, { isOnline: false, lastSeen: serverTimestamp() }).catch(console.error);
+           } else {
+               updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(console.error);
+           }
+        };
+        
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        
+        // Clean up
       } else {
         setUserProfile(null);
         setLoading(false);
@@ -65,8 +84,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const logout = async () => {
+    if (user) {
+        // Set offline before signing out
+        try {
+            await updateDoc(doc(db, 'users', user.uid), { isOnline: false, lastSeen: serverTimestamp() });
+        } catch (e) { console.error("Error setting offline", e); }
+    }
     await signOut(auth);
-    // User state clearing is handled by the authStateChanged listener
   };
 
   const refreshProfile = async () => {
