@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Shield, FileText, Cookie, Megaphone, Scale, 
   ChevronRight, ArrowLeft, Lock, Globe 
@@ -10,8 +10,22 @@ import { cn } from '../lib/utils';
 
 type Section = 'privacy' | 'terms' | 'advertising' | 'cookies' | 'ad_choices';
 
-export const LegalPage: React.FC = () => {
+interface LegalPageProps {
+  initialSection?: string;
+}
+
+export const LegalPage: React.FC<LegalPageProps> = ({ initialSection }) => {
   const [activeSection, setActiveSection] = useState<Section>('privacy');
+
+  useEffect(() => {
+    if (initialSection) {
+      // Validate that the section exists, otherwise default to privacy
+      const validSections: Section[] = ['privacy', 'terms', 'advertising', 'cookies', 'ad_choices'];
+      if (validSections.includes(initialSection as Section)) {
+        setActiveSection(initialSection as Section);
+      }
+    }
+  }, [initialSection]);
 
   const MenuLink = ({ id, label, icon: Icon }: { id: Section, label: string, icon: any }) => (
     <button
@@ -60,8 +74,8 @@ export const LegalPage: React.FC = () => {
             </Card>
 
             <div className="px-4 text-xs text-slate-400 leading-relaxed">
-               <p>Last updated: October 24, 2026</p>
-               <p className="mt-2">Synapse Inc.<br/>123 Innovation Dr.<br/>San Francisco, CA 94103</p>
+               <p>Last updated: January 10, 2026</p>
+               <p className="mt-2 font-bold">Synapse</p>
             </div>
          </div>
 

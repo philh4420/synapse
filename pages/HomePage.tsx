@@ -26,10 +26,14 @@ import { SiteSettings } from '../types';
 
 export const HomePage: React.FC = () => {
   // Initialize state from localStorage if available
-  const [activeTab, setActiveTab] = useState(() => {
+  const [activeTabString, setActiveTab] = useState(() => {
     return localStorage.getItem('synapse_active_tab') || 'feed';
   });
   
+  // Parse tab and section if applicable (e.g. "legal:privacy")
+  const activeTab = activeTabString.split(':')[0];
+  const activeSection = activeTabString.split(':')[1];
+
   const [viewedProfileUid, setViewedProfileUid] = useState<string | null>(() => {
     const stored = localStorage.getItem('synapse_viewed_profile');
     return stored === 'null' || !stored ? null : stored;
@@ -43,8 +47,8 @@ export const HomePage: React.FC = () => {
 
   // Persist state changes
   useEffect(() => {
-    localStorage.setItem('synapse_active_tab', activeTab);
-  }, [activeTab]);
+    localStorage.setItem('synapse_active_tab', activeTabString);
+  }, [activeTabString]);
 
   useEffect(() => {
     if (viewedProfileUid) {
@@ -93,7 +97,7 @@ export const HomePage: React.FC = () => {
       case 'feed':
         return <Feed />;
       case 'profile':
-        return <Profile targetUid={viewedProfileUid} onViewProfile={handleViewProfile} />;
+        return <Profile targetUid={viewedProfileUid} onViewProfile={handleViewProfile} onNavigate={handleTabChange} />;
       case 'friends':
         return <FriendsPage onViewProfile={handleViewProfile} />;
       case 'memories':
@@ -109,7 +113,7 @@ export const HomePage: React.FC = () => {
       case 'settings':
         return <SettingsPage />;
       case 'legal':
-        return <LegalPage />;
+        return <LegalPage initialSection={activeSection} />;
       case 'help':
         return <HelpPage />;
       case 'display':

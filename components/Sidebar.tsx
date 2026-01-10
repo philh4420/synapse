@@ -140,11 +140,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onVie
       
       <div className="mt-auto pt-8 px-2">
          <div className="flex flex-wrap gap-x-1.5 gap-y-1 text-xs text-slate-400 leading-relaxed font-medium">
-            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Privacy</button> · 
-            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Terms</button> · 
-            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Advertising</button> · 
-            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Ad Choices</button> · 
-            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Cookies</button>
+            <button onClick={() => setActiveTab('legal:privacy')} className="hover:underline hover:text-slate-600">Privacy</button> · 
+            <button onClick={() => setActiveTab('legal:terms')} className="hover:underline hover:text-slate-600">Terms</button> · 
+            <button onClick={() => setActiveTab('legal:advertising')} className="hover:underline hover:text-slate-600">Advertising</button> · 
+            <button onClick={() => setActiveTab('legal:ad_choices')} className="hover:underline hover:text-slate-600">Ad Choices</button> · 
+            <button onClick={() => setActiveTab('legal:cookies')} className="hover:underline hover:text-slate-600">Cookies</button>
          </div>
          <p className="text-xs text-slate-400 mt-2">
             Synapse © 2026

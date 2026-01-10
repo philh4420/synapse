@@ -25,9 +25,10 @@ import { format } from 'date-fns';
 interface ProfileProps {
   targetUid?: string | null;
   onViewProfile?: (uid: string) => void;
+  onNavigate?: (tab: string) => void;
 }
 
-export const Profile: React.FC<ProfileProps> = ({ targetUid, onViewProfile }) => {
+export const Profile: React.FC<ProfileProps> = ({ targetUid, onViewProfile, onNavigate }) => {
   const { userProfile: currentUserProfile, user } = useAuth();
   const { openChat } = useMessenger(); // Hook
   
@@ -667,7 +668,14 @@ export const Profile: React.FC<ProfileProps> = ({ targetUid, onViewProfile }) =>
                   
                   {/* Copyright / Footer Links */}
                   <div className="text-[11px] text-slate-400 px-2 leading-relaxed">
-                     <p>Privacy  · Terms  · Advertising  · Ad Choices   · Cookies  ·   More · Synapse © 2026</p>
+                     <p>
+                        <button onClick={() => onNavigate?.('legal:privacy')} className="hover:underline hover:text-slate-600">Privacy</button> · 
+                        <button onClick={() => onNavigate?.('legal:terms')} className="hover:underline hover:text-slate-600">Terms</button> · 
+                        <button onClick={() => onNavigate?.('legal:advertising')} className="hover:underline hover:text-slate-600">Advertising</button> · 
+                        <button onClick={() => onNavigate?.('legal:ad_choices')} className="hover:underline hover:text-slate-600">Ad Choices</button> · 
+                        <button onClick={() => onNavigate?.('legal:cookies')} className="hover:underline hover:text-slate-600">Cookies</button> · 
+                        More · Synapse © 2026
+                     </p>
                   </div>
                </div>
 
