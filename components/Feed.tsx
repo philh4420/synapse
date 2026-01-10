@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { Loader2, Sparkles, Rss, Users, ArrowUp, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-const POSTS_PER_PAGE = 5;
+const POSTS_PER_PAGE = 10;
 
 export const Feed: React.FC = () => {
   const { user, userProfile } = useAuth();
@@ -177,6 +177,9 @@ export const Feed: React.FC = () => {
              timestamp: data.timestamp?.toDate() || new Date(),
           } as PostType;
       }).filter(post => {
+          // EXCLUDE COMMUNITY POSTS from main feed
+          if (post.communityId) return false;
+
           if (post.author.uid === user?.uid) return true;
           if (post.privacy === 'public' || !post.privacy) return true;
           if (post.privacy === 'friends') {

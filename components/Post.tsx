@@ -485,6 +485,12 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
                        {currentPost.location && ` at ${currentPost.location}`}
                     </span>
                  )}
+                 {currentPost.communityId && (
+                    <div className="flex items-center gap-1.5 bg-slate-100 rounded-md px-2 py-1 text-xs font-bold text-slate-600 w-fit mt-1">
+                       <Users className="w-3 h-3" />
+                       <span>Community Member</span>
+                    </div>
+                 )}
               </div>
               <div className="flex items-center gap-1 text-slate-500 text-[13px]">
                  <span className="hover:underline cursor-pointer">
@@ -509,6 +515,50 @@ export const Post: React.FC<{ post: PostType }> = ({ post: initialPost }) => {
                 {isSaved ? "Unsave post" : "Save post"}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-slate-100" />
+              {/* Privacy Dropdown (Hidden if in community) */}
+              {!currentPost.communityId && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <DropdownMenuItem className="gap-3 cursor-pointer font-medium py-2 rounded-lg">
+                      {getPrivacyIcon(currentPost.privacy)} Edit privacy
+                    </DropdownMenuItem>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[300px] p-2 rounded-2xl shadow-xl border-slate-100">
+                    <div className="px-3 py-2 text-[17px] font-bold text-slate-900">Post Audience</div>
+                    <Separator className="mb-2 bg-slate-100" />
+                    <DropdownMenuItem onClick={async () => {
+                        await updateDoc(doc(db, 'posts', currentPost.id), { privacy: 'public' });
+                        setCurrentPost(prev => ({ ...prev, privacy: 'public' }));
+                    }} className="gap-3 p-3 rounded-xl cursor-pointer focus:bg-slate-50">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0"><Globe className="w-5 h-5 text-slate-700" /></div>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 text-base">Public</span>
+                        <span className="text-xs text-slate-500">Anyone on or off Synapse</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={async () => {
+                        await updateDoc(doc(db, 'posts', currentPost.id), { privacy: 'friends' });
+                        setCurrentPost(prev => ({ ...prev, privacy: 'friends' }));
+                    }} className="gap-3 p-3 rounded-xl cursor-pointer focus:bg-slate-50">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0"><Users className="w-5 h-5 text-slate-700" /></div>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 text-base">Friends</span>
+                        <span className="text-xs text-slate-500">Your friends on Synapse</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={async () => {
+                        await updateDoc(doc(db, 'posts', currentPost.id), { privacy: 'only_me' });
+                        setCurrentPost(prev => ({ ...prev, privacy: 'only_me' }));
+                    }} className="gap-3 p-3 rounded-xl cursor-pointer focus:bg-slate-50">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0"><Lock className="w-5 h-5 text-slate-700" /></div>
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 text-base">Only me</span>
+                        <span className="text-xs text-slate-500">Only you can see this post</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {isAuthor && (
                 <>
                   <DropdownMenuItem onClick={() => { setIsEditing(true); setEditContent(currentPost.content); setEditImages(currentPost.images || (currentPost.image ? [currentPost.image] : [])); }} className="gap-3 cursor-pointer font-medium py-2 rounded-lg">

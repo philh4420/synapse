@@ -91,10 +91,12 @@ export const Profile: React.FC<ProfileProps> = ({ targetUid, onViewProfile, onNa
             };
          }) as PostType[];
 
-         setPosts(postsData);
+         // Filter out community posts from profile
+         const filteredPosts = postsData.filter(p => !p.communityId);
+         setPosts(filteredPosts);
 
          // Extract photos from posts for the photo tab
-         const userPhotos = postsData
+         const userPhotos = filteredPosts
             .filter(p => p.image || (p.images && p.images.length > 0))
             .flatMap(p => p.images || (p.image ? [p.image] : []));
          setPhotos(userPhotos);
