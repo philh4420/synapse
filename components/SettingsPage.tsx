@@ -8,7 +8,8 @@ import { db } from '../firebaseConfig';
 import { 
   Settings, Shield, Lock, Bell, Globe, User, 
   ChevronRight, Key, Mail, Eye, EyeOff, Loader2,
-  Trash2, Save, LogOut, AlertTriangle
+  Trash2, Save, LogOut, AlertTriangle, CheckCircle2, Smartphone, 
+  Activity, Database, Download, Search, UserCheck, Sliders
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -59,6 +60,10 @@ export const SettingsPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+
+  // Data Download Dialog
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadStep, setDownloadStep] = useState(0);
 
   // Initialize state from profile
   useEffect(() => {
@@ -194,10 +199,7 @@ export const SettingsPage: React.FC = () => {
         // Delete Auth User
         await deleteUser(user);
         
-        // We use 'info' or 'success' type for toast. Since user is being logged out/deleted,
-        // the toast needs to appear in the context of the App which persists.
         toast("Account permanently deleted. Goodbye.", "info");
-        // Auth state listener in App.tsx will handle redirect to Landing
      } catch (e: any) {
         console.error(e);
         if (e.code === 'auth/wrong-password') {
@@ -255,6 +257,39 @@ export const SettingsPage: React.FC = () => {
              checked ? "translate-x-6" : "translate-x-0"
           )} />
        </button>
+    </div>
+  );
+
+  // Reused from PrivacyPage for consistent rich UI
+  const PrivacyOption = ({ 
+    icon: Icon, 
+    title, 
+    desc, 
+    value, 
+    options, 
+    onChange,
+    color = "text-synapse-600",
+    bg = "bg-synapse-50"
+  }: any) => (
+    <div className="group relative overflow-hidden bg-slate-50 border border-slate-100 rounded-3xl p-6 transition-all duration-300 hover:shadow-lg hover:border-slate-200">
+       <div className="flex items-start justify-between mb-4">
+          <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500", bg)}>
+             <Icon className={cn("w-6 h-6", color)} />
+          </div>
+          {options && (
+             <select 
+               className="bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-synapse-500/20 cursor-pointer shadow-sm"
+               value={value}
+               onChange={(e) => onChange(e.target.value)}
+             >
+                {options.map((opt: any) => (
+                   <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+             </select>
+          )}
+       </div>
+       <h3 className="text-lg font-bold text-slate-900 mb-2 group-hover:text-synapse-700 transition-colors">{title}</h3>
+       <p className="text-sm text-slate-500 leading-relaxed font-medium">{desc}</p>
     </div>
   );
 
@@ -391,68 +426,173 @@ export const SettingsPage: React.FC = () => {
                </div>
             )}
 
-            {/* --- PRIVACY SETTINGS --- */}
+            {/* --- PRIVACY SETTINGS (MERGED FROM PRIVACYPAGE) --- */}
             {activeSection === 'privacy' && (
-               <div className="space-y-8">
-                  <div>
-                     <h2 className="text-xl font-bold text-slate-900 mb-2">Privacy Settings</h2>
-                     <p className="text-slate-500 text-sm mb-6">Control who sees your content and how people find you.</p>
+               <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2">
+                  
+                  {/* Header / Checkup Banner */}
+                  <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl p-8">
+                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
+                     <div className="absolute -right-10 -top-10 w-48 h-48 bg-white/20 rounded-full blur-3xl"></div>
+                     
+                     <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div>
+                           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/20 text-xs font-bold uppercase tracking-widest mb-3">
+                              <Shield className="w-3 h-3" /> Privacy Checkup
+                           </div>
+                           <h2 className="text-3xl font-black mb-2">You're in control.</h2>
+                           <p className="text-emerald-50 text-sm font-medium leading-relaxed max-w-sm">
+                              Review your key settings to ensure you're sharing exactly what you want, with whom you want.
+                           </p>
+                        </div>
+                        <Button className="bg-white text-emerald-700 hover:bg-emerald-50 font-bold rounded-xl shadow-lg border-0 px-6">
+                           Start Review
+                        </Button>
+                     </div>
+                  </div>
 
-                     <div className="space-y-4">
-                        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
-                           <h3 className="font-bold text-slate-900 mb-4">Your Activity</h3>
-                           <div className="flex items-center justify-between py-3">
-                              <div>
-                                 <p className="font-medium text-slate-900">Default Post Audience</p>
-                                 <p className="text-xs text-slate-500 mt-1">Who can see your future posts?</p>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                     {/* Privacy Status Status */}
+                     <Card className="p-6 bg-slate-50 border-slate-100 shadow-sm rounded-3xl">
+                        <h3 className="font-bold text-slate-900 mb-4 text-sm uppercase tracking-wider">Security Status</h3>
+                        <div className="space-y-4 relative">
+                           <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-slate-200"></div>
+                           <div className="relative flex gap-3 items-center">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 border-2 border-white shadow-sm flex items-center justify-center z-10 shrink-0">
+                                 <Lock className="w-3.5 h-3.5 text-blue-600" />
                               </div>
-                              <select 
-                                 className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-synapse-500/50"
-                                 value={settings.privacy?.defaultPostAudience || 'public'}
-                                 onChange={(e) => updateNestedSetting('privacy', 'defaultPostAudience', e.target.value)}
-                              >
-                                 <option value="public">Public</option>
-                                 <option value="friends">Friends</option>
-                                 <option value="only_me">Only Me</option>
-                              </select>
+                              <div className="flex-1">
+                                 <p className="text-xs font-bold text-slate-800">Password</p>
+                                 <p className="text-[10px] text-slate-500">Updated 3mo ago</p>
+                              </div>
+                           </div>
+                           <div className="relative flex gap-3 items-center">
+                              <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-white shadow-sm flex items-center justify-center z-10 shrink-0">
+                                 <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
+                              </div>
+                              <div className="flex-1">
+                                 <p className="text-xs font-bold text-slate-800">2-Factor Auth</p>
+                                 <p className="text-[10px] text-slate-500">Enabled</p>
+                              </div>
+                           </div>
+                           <div className="relative flex gap-3 items-center">
+                              <div className="w-8 h-8 rounded-full bg-purple-100 border-2 border-white shadow-sm flex items-center justify-center z-10 shrink-0">
+                                 <Activity className="w-3.5 h-3.5 text-purple-600" />
+                              </div>
+                              <div className="flex-1">
+                                 <p className="text-xs font-bold text-slate-800">Last Login</p>
+                                 <p className="text-[10px] text-slate-500">San Francisco • Chrome</p>
+                              </div>
                            </div>
                         </div>
+                     </Card>
 
-                        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
-                           <h3 className="font-bold text-slate-900 mb-4">Connections</h3>
-                           
-                           <div className="flex items-center justify-between py-3 border-b border-slate-200/60">
-                              <div>
-                                 <p className="font-medium text-slate-900">Who can send you friend requests?</p>
+                     {/* Download Data */}
+                     <Card className="p-6 bg-slate-900 text-white border-slate-800 shadow-md rounded-3xl overflow-hidden relative flex flex-col justify-between">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/20 rounded-full blur-2xl -mr-6 -mt-6"></div>
+                        <div className="relative z-10">
+                           <h3 className="font-bold text-lg mb-1 flex items-center gap-2">
+                              <Database className="w-4 h-4 text-blue-400" /> Your Data
+                           </h3>
+                           <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                              Download a copy of your information to keep or transfer.
+                           </p>
+                           <Button 
+                              onClick={() => setDownloadDialogOpen(true)}
+                              size="sm"
+                              className="w-full bg-blue-600 hover:bg-blue-500 text-white border-0 font-bold rounded-xl h-9"
+                           >
+                              Download Archive
+                           </Button>
+                        </div>
+                     </Card>
+                  </div>
+
+                  {/* Enhanced Controls */}
+                  <div>
+                     <h3 className="text-xl font-bold text-slate-900 mb-4">Audience & Visibility</h3>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <PrivacyOption 
+                           icon={Globe}
+                           title="Post Audience"
+                           desc="Who can see your future posts?"
+                           value={settings.privacy?.defaultPostAudience || 'public'}
+                           onChange={(val: any) => updateNestedSetting('privacy', 'defaultPostAudience', val)}
+                           options={[
+                              { label: 'Public', value: 'public' },
+                              { label: 'Friends', value: 'friends' },
+                              { label: 'Only Me', value: 'only_me' }
+                           ]}
+                           color="text-indigo-600"
+                           bg="bg-indigo-50"
+                        />
+                        <PrivacyOption 
+                           icon={Search}
+                           title="Search Visibility"
+                           desc="Allow search engines to link to your profile?"
+                           value={settings.privacy?.searchEngineIndexing ? 'true' : 'false'}
+                           onChange={(val: any) => updateNestedSetting('privacy', 'searchEngineIndexing', val === 'true')}
+                           options={[
+                              { label: 'Yes', value: 'true' },
+                              { label: 'No', value: 'false' }
+                           ]}
+                           color="text-blue-600"
+                           bg="bg-blue-50"
+                        />
+                        <PrivacyOption 
+                           icon={UserCheck}
+                           title="Friend Requests"
+                           desc="Who can send you friend requests?"
+                           value={settings.privacy?.friendRequests || 'everyone'}
+                           onChange={(val: any) => updateNestedSetting('privacy', 'friendRequests', val)}
+                           options={[
+                              { label: 'Everyone', value: 'everyone' },
+                              { label: 'Friends of Friends', value: 'friends_of_friends' }
+                           ]}
+                           color="text-emerald-600"
+                           bg="bg-emerald-50"
+                        />
+                        <div className="group relative overflow-hidden bg-slate-50 border border-slate-100 rounded-3xl p-6 transition-all duration-300 hover:shadow-lg hover:border-slate-200 flex flex-col justify-between">
+                           <div>
+                              <div className="flex items-center justify-between mb-4">
+                                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-rose-50 text-rose-500">
+                                    <AlertTriangle className="w-6 h-6" />
+                                 </div>
                               </div>
-                              <select 
-                                 className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-synapse-500/50"
-                                 value={settings.privacy?.friendRequests || 'everyone'}
-                                 onChange={(e) => updateNestedSetting('privacy', 'friendRequests', e.target.value)}
-                              >
-                                 <option value="everyone">Everyone</option>
-                                 <option value="friends_of_friends">Friends of Friends</option>
-                              </select>
+                              <h3 className="text-lg font-bold text-slate-900 mb-2">Blocking</h3>
+                              <p className="text-sm text-slate-500 font-medium">Manage blocked users.</p>
                            </div>
-
-                           <div className="flex items-center justify-between py-3">
-                              <div>
-                                 <p className="font-medium text-slate-900">Search Engine Indexing</p>
-                                 <p className="text-xs text-slate-500 mt-1">Allow search engines to link to your profile?</p>
-                              </div>
-                              <button 
-                                 onClick={() => updateNestedSetting('privacy', 'searchEngineIndexing', !settings.privacy?.searchEngineIndexing)}
-                                 className={cn(
-                                    "px-3 py-1.5 rounded-lg text-sm font-bold border transition-colors",
-                                    settings.privacy?.searchEngineIndexing ? "bg-blue-50 text-blue-600 border-blue-200" : "bg-slate-100 text-slate-500 border-slate-200"
-                                 )}
-                              >
-                                 {settings.privacy?.searchEngineIndexing ? "Enabled" : "Disabled"}
-                              </button>
+                           <div className="mt-4 pt-4 border-t border-slate-200/50">
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">
+                                 {userProfile?.blockedUsers?.length || 0} Blocked
+                              </p>
                            </div>
                         </div>
                      </div>
                   </div>
+
+                  {/* Data & Ads Section */}
+                  <div>
+                     <h3 className="text-xl font-bold text-slate-900 mb-4">Data & Ads</h3>
+                     <div className="bg-white border border-slate-200 rounded-[2rem] p-6 shadow-sm flex flex-col md:flex-row items-center gap-6">
+                        <div className="flex-1 space-y-3">
+                           <div className="flex items-center gap-2">
+                              <div className="p-2 bg-purple-50 rounded-xl text-purple-600">
+                                 <Sliders className="w-5 h-5" />
+                              </div>
+                              <h4 className="text-lg font-bold text-slate-900">Ad Preferences</h4>
+                           </div>
+                           <p className="text-slate-500 text-sm leading-relaxed">
+                              Synapse shows you ads relevant to your interests. We never sell your personal information. You can control the data used to show you ads.
+                           </p>
+                           <div className="flex gap-2 pt-1">
+                              <Button variant="outline" className="rounded-xl font-bold h-9 text-xs">Review Interests</Button>
+                              <Button variant="ghost" className="rounded-xl font-bold text-slate-600 h-9 text-xs">Ad Settings</Button>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
                </div>
             )}
 
@@ -569,6 +709,60 @@ export const SettingsPage: React.FC = () => {
             </DialogFooter>
          </DialogContent>
       </Dialog>
+
+      {/* Download Data Dialog */}
+      <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+          <DialogContent className="sm:max-w-[500px] bg-white rounded-3xl p-0 overflow-hidden">
+             <div className="p-8 pb-0">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-6">
+                   <Download className="w-8 h-8 text-blue-600" />
+                </div>
+                <DialogHeader className="mb-4">
+                   <DialogTitle className="text-2xl font-black text-slate-900">Download Your Information</DialogTitle>
+                   <DialogDescription className="text-base text-slate-500">
+                      Get a copy of what you've shared on Synapse.
+                   </DialogDescription>
+                </DialogHeader>
+                
+                {downloadStep === 0 ? (
+                   <div className="space-y-4 py-4">
+                      <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
+                         This file will contain your profile information, posts, comments, and messages. It may take a few minutes to generate depending on how much activity you have.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                         <div className="p-3 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                            <span className="block font-bold text-slate-900">HTML</span>
+                            <span className="text-xs text-slate-500">Best for viewing</span>
+                         </div>
+                         <div className="p-3 border border-slate-200 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all text-center">
+                            <span className="block font-bold text-slate-900">JSON</span>
+                            <span className="text-xs text-slate-500">Best for importing</span>
+                         </div>
+                      </div>
+                   </div>
+                ) : (
+                   <div className="py-8 text-center space-y-4">
+                      <div className="inline-block relative">
+                         <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                      </div>
+                      <p className="font-bold text-slate-900">Creating your file...</p>
+                      <p className="text-sm text-slate-500">We'll email you at <span className="font-bold text-slate-700">{user?.email}</span> when it's ready.</p>
+                   </div>
+                )}
+             </div>
+             <DialogFooter className="p-6 bg-slate-50 border-t border-slate-100">
+                {downloadStep === 0 ? (
+                   <>
+                      <Button variant="ghost" onClick={() => setDownloadDialogOpen(false)} className="rounded-xl font-bold">Cancel</Button>
+                      <Button onClick={() => setDownloadStep(1)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold px-6 shadow-lg shadow-blue-500/20">Create File</Button>
+                   </>
+                ) : (
+                   <Button onClick={() => setDownloadDialogOpen(false)} className="w-full bg-slate-900 text-white rounded-xl font-bold">Done</Button>
+                )}
+             </DialogFooter>
+          </DialogContent>
+       </Dialog>
+
     </div>
   );
 };

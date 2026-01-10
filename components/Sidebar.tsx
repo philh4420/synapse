@@ -140,9 +140,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onVie
       </div>
       
       <div className="mt-auto pt-8 px-2">
-         <p className="text-xs text-slate-400 leading-relaxed">
-            Privacy  · Terms  · Advertising  · Ad Choices <br/>
-            Cookies  ·   Synapse © 2026
+         <div className="flex flex-wrap gap-x-1.5 gap-y-1 text-xs text-slate-400 leading-relaxed font-medium">
+            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Privacy</button> · 
+            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Terms</button> · 
+            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Advertising</button> · 
+            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Ad Choices</button> · 
+            <button onClick={() => setActiveTab('legal')} className="hover:underline hover:text-slate-600">Cookies</button>
+         </div>
+         <p className="text-xs text-slate-400 mt-2">
+            Synapse © 2026
          </p>
       </div>
     </div>
